@@ -1,7 +1,17 @@
-const API_BASE =
-  (import.meta.env.VITE_API_URL as string) ||
-  (import.meta.env.VITE_API_BASE as string) ||
-  'http://localhost:3000/api'
+const PRODUCTION_API = 'https://api.astracore.dev/api'
+
+function getApiBase(): string {
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return PRODUCTION_API
+  }
+  return (
+    (import.meta.env.VITE_API_URL as string) ||
+    (import.meta.env.VITE_API_BASE as string) ||
+    'http://localhost:3000/api'
+  )
+}
+
+const API_BASE = getApiBase()
 
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
