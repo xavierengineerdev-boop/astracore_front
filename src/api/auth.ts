@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
+import { API_BASE } from './client'
 
 type ApiSuccess<T> = { statusCode: number; data: T; timestamp: string }
 type ApiError = { statusCode: number; error: string; message: string | string[]; timestamp: string }
