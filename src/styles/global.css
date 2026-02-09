@@ -1,0 +1,58 @@
+/* Layout: only main content scrolls, not the whole page */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Global styles to neutralize browser autofill background and keep transparent inputs */
+input:-webkit-autofill,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: inherit !important;
+  background-color: transparent !important;
+}
+
+/* For newer WebKit/Blink engines */
+input:-webkit-autofill::first-line,
+textarea:-webkit-autofill::first-line {
+  -webkit-text-fill-color: inherit !important;
+}
+
+/* Ensure MUI outlined inputs keep transparent background and visible outline */
+.MuiOutlinedInput-root {
+  background-color: transparent !important;
+}
+.MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255,255,255,0.12) !important;
+}
+.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(123,75,246,0.9) !important;
+}
+
+/* Label above outline so border doesn’t overlap text */
+.MuiInputLabel-root.MuiInputLabel-outlined {
+  z-index: 1;
+}
+
+/* Normal-sized inputs: comfortable padding and min-height */
+.MuiOutlinedInput-root {
+  min-height: 48px;
+}
+.MuiOutlinedInput-root .MuiOutlinedInput-input {
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+  box-sizing: border-box;
+  min-height: 20px;
+}
+.MuiOutlinedInput-root.MuiInputBase-sizeSmall {
+  min-height: 40px;
+}
+.MuiOutlinedInput-root.MuiInputBase-sizeSmall .MuiOutlinedInput-input {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+.MuiInputLabel-outlined.MuiInputLabel-shrink {
+  transform: translate(14px, -9px) scale(0.75);
+}
