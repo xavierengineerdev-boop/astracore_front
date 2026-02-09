@@ -1,4 +1,7 @@
-const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string) ||
+  (import.meta.env.VITE_API_BASE as string) ||
+  'http://localhost:3000/api'
 
 const ACCESS_KEY = 'access_token'
 const REFRESH_KEY = 'refresh_token'
