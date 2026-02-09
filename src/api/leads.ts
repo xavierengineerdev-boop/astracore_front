@@ -136,6 +136,16 @@ export async function deleteLead(id: string): Promise<void> {
   await parseResponse<{ message: string }>(res)
 }
 
+export type BulkDeleteLeadsResult = { deleted: number }
+
+export async function bulkDeleteLeads(leadIds: string[]): Promise<BulkDeleteLeadsResult> {
+  const res = await authenticatedFetch(`${API_BASE}/leads/bulk-delete`, {
+    method: 'POST',
+    body: JSON.stringify({ leadIds }),
+  })
+  return parseResponse<BulkDeleteLeadsResult>(res)
+}
+
 export type LeadNoteItem = {
   _id: string
   leadId: string

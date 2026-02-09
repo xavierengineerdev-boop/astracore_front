@@ -29,7 +29,6 @@ import BarChartIcon from '@mui/icons-material/BarChart'
 import LogoutIcon from '@mui/icons-material/Logout'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import PersonIcon from '@mui/icons-material/Person'
-import SearchIcon from '@mui/icons-material/Search'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getUpcomingReminders, markLeadReminderDone, type UpcomingReminderItem } from '@/api/leads'
@@ -270,9 +269,6 @@ const MainLayout: React.FC = () => {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <IconButton color="inherit" sx={{ mr: 0.5 }} aria-label="Поиск" size="small">
-            <SearchIcon />
-          </IconButton>
           <IconButton
             color="inherit"
             onClick={(e) => {

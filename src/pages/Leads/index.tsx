@@ -44,6 +44,7 @@ import {
   deleteLead,
   bulkCreateLeads,
   bulkUpdateLeads,
+  bulkDeleteLeads,
   type LeadItem,
 } from '@/api/leads'
 import * as XLSX from 'xlsx'
@@ -110,6 +111,8 @@ const LeadsPage: React.FC = () => {
   const [bulkEditChangeAssignees, setBulkEditChangeAssignees] = useState(false)
   const [bulkEditAssignedTo, setBulkEditAssignedTo] = useState<string[]>([])
   const [bulkEditSaving, setBulkEditSaving] = useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false)
   const [leadFormOpen, setLeadFormOpen] = useState(false)
   const [leadEditId, setLeadEditId] = useState<string | null>(null)
   const [leadName, setLeadName] = useState('')
@@ -146,6 +149,7 @@ const LeadsPage: React.FC = () => {
     (user?.role === 'manager' && selectedDepartmentId) ||
     (user?.role === 'employee' && (user as { departmentId?: string }).departmentId === selectedDepartmentId)
   const canBulkEditLeads = user?.role === 'super' || user?.role === 'manager'
+  const canBulkDeleteLeads = user?.role === 'super' || user?.role === 'manager'
   const canBulkCreateLeads = user?.role === 'super' || user?.role === 'manager'
   const isEmployee = user?.role === 'employee'
 
@@ -387,6 +391,22 @@ const LeadsPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setBulkEditSaving(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedLeadIds.length === 0) return
+    setBulkDeleteSaving(true)
+    try {
+      const result = await bulkDeleteLeads(selectedLeadIds)
+      toast.success(`Удалено лидов: ${result.deleted}`)
+      setBulkDeleteOpen(false)
+      setSelectedLeadIds([])
+      await refetchLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка удаления')
+    } finally {
+      setBulkDeleteSaving(false)
     }
   }
 
@@ -766,13 +786,20 @@ const LeadsPage: React.FC = () => {
             </Box>
           </Drawer>
 
-          {canBulkEditLeads && someSelected && (
+          {(canBulkEditLeads || canBulkDeleteLeads) && someSelected && (
             <Paper sx={{ p: 1.5, mb: 1, bgcolor: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 2, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Выбрано: {selectedLeadIds.length}</Typography>
-                <Button size="small" variant="outlined" onClick={() => setBulkEditOpen(true)} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
-                  Изменить статус / исполнителей
-                </Button>
+                {canBulkEditLeads && (
+                  <Button size="small" variant="outlined" onClick={() => setBulkEditOpen(true)} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
+                    Изменить статус / исполнителей
+                  </Button>
+                )}
+                {canBulkDeleteLeads && (
+                  <Button size="small" variant="outlined" color="error" onClick={() => setBulkDeleteOpen(true)}>
+                    Удалить выбранные
+                  </Button>
+                )}
                 <Button size="small" onClick={() => setSelectedLeadIds([])} sx={{ color: 'rgba(255,255,255,0.7)' }}>
                   Снять выделение
                 </Button>
@@ -1244,6 +1271,36 @@ const LeadsPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
           >
             {bulkEditSaving ? 'Сохранение…' : 'Применить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={bulkDeleteOpen}
+        onClose={() => !bulkDeleteSaving && setBulkDeleteOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить выбранные лиды?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Будет удалено лидов: <strong>{selectedLeadIds.length}</strong>. Отменить действие нельзя.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleteSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleBulkDelete}
+            disabled={bulkDeleteSaving}
+          >
+            {bulkDeleteSaving ? 'Удаление…' : 'Удалить'}
           </Button>
         </DialogActions>
       </Dialog>
