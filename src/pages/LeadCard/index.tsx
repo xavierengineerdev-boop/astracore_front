@@ -179,12 +179,15 @@ const LeadCardPage: React.FC = () => {
 
   const displayHistory = useMemo(() => {
     const hasCreated = history.some((e) => e.action === 'created')
-    if (!lead?.createdAt || !lead?.createdBy) return history
-    if (hasCreated) return history
-    return [
-      { _id: '_created', action: 'created' as const, userId: lead.createdBy, createdAt: lead.createdAt, meta: { name: lead.name } },
-      ...history,
-    ]
+    let list = history
+    if (lead?.createdAt && lead?.createdBy && !hasCreated) {
+      list = [
+        { _id: '_created', action: 'created' as const, userId: lead.createdBy, createdAt: lead.createdAt, meta: { name: lead.name } },
+        ...history,
+      ]
+    }
+    // Последние изменения сверху, первые внизу
+    return [...list].reverse()
   }, [history, lead?.createdAt, lead?.createdBy, lead?.name])
 
   const activityByDay = useMemo(() => {
