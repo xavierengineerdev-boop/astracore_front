@@ -342,7 +342,7 @@ export type BulkCreateLeadsResult = {
 
 export async function bulkCreateLeads(
   departmentId: string,
-  items: { name: string; phone: string }[],
+  items: { name: string; phone: string; email?: string }[],
 ): Promise<BulkCreateLeadsResult> {
   const res = await authenticatedFetch(`${API_BASE}/leads/bulk`, {
     method: 'POST',

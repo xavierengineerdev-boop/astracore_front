@@ -132,19 +132,22 @@ const LeadsPage: React.FC = () => {
   const [leadDeleting, setLeadDeleting] = useState(false)
   const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null)
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
-  const [bulkParsedItems, setBulkParsedItems] = useState<{ name: string; phone: string }[] | null>(null)
+  const [bulkParsedItems, setBulkParsedItems] = useState<{ name: string; phone: string; email?: string }[] | null>(null)
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const [bulkResult, setBulkResult] = useState<{ added: number; duplicates: number } | null>(null)
   const bulkFileInputRef = React.useRef<HTMLInputElement>(null)
 
-  const parsePastedTable = (text: string): { name: string; phone: string }[] => {
+  const parsePastedTable = (text: string): { name: string; phone: string; email?: string }[] => {
     const lines = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
-    const items: { name: string; phone: string }[] = []
-    for (const line of lines) {
-      const parts = line.includes('\t') ? line.split('\t') : line.split(/[,;]/).map((s) => s.trim())
+    const items: { name: string; phone: string; email?: string }[] = []
+    const headerLike = /^(имя|name|телефон|phone|почта|email|№)$/i
+    for (let i = 0; i < lines.length; i++) {
+      const parts = lines[i].includes('\t') ? lines[i].split('\t') : lines[i].split(/[,;]/).map((s) => s.trim())
       const name = (parts[0] ?? '').trim()
       const phone = (parts[1] ?? '').trim().replace(/\s/g, '')
-      if (name && phone) items.push({ name, phone })
+      const email = (parts[2] ?? '').trim().toLowerCase()
+      if (i === 0 && (headerLike.test(name) || headerLike.test(phone) || headerLike.test(email))) continue
+      if (name && phone) items.push({ name, phone, email: email || undefined })
     }
     return items
   }
@@ -504,14 +507,15 @@ const LeadsPage: React.FC = () => {
             return
           }
           const rows = XLSX.utils.sheet_to_json<string[]>(wb.Sheets[firstSheet], { header: 1 })
-          const items: { name: string; phone: string }[] = []
-          const headerLike = /^(имя|name|телефон|phone|№)$/i
+          const items: { name: string; phone: string; email?: string }[] = []
+          const headerLike = /^(имя|name|телефон|phone|почта|email|№)$/i
           for (let i = 0; i < rows.length; i++) {
             const row = rows[i] || []
             const name = String(row[0] ?? '').trim()
             const phone = String(row[1] ?? '').trim().replace(/\s/g, '')
-            if (i === 0 && (headerLike.test(name) || headerLike.test(phone))) continue
-            if (name && phone) items.push({ name, phone })
+            const email = String(row[2] ?? '').trim().toLowerCase()
+            if (i === 0 && (headerLike.test(name) || headerLike.test(phone) || headerLike.test(email))) continue
+            if (name && phone) items.push({ name, phone, email: email || undefined })
           }
           setBulkParsedItems(items)
         } else {
@@ -1431,7 +1435,7 @@ const LeadsPage: React.FC = () => {
         <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Массовое добавление лидов</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography sx={{ color: 'rgba(255,255,255,0.7)', mb: 2 }}>
-            Загрузите файл (Excel .xlsx, CSV, TXT): первый столбец — имя, второй — телефон. Дубликаты по телефону в отделе не добавляются.
+            Загрузите файл (Excel .xlsx, CSV, TXT): 1-й столбец — имя, 2-й — телефон, 3-й — почта (необязательно). Дубликаты по телефону в отделе не добавляются.
           </Typography>
           <input
             type="file"
