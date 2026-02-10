@@ -79,6 +79,7 @@ const LeadsPage: React.FC = () => {
   const navigate = useNavigate()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
+  // Сотрудник видит только свои лиды; руководитель, админ, супер — могут выбирать «Все» / «Мои»
   const scopeFromUrl = searchParams.get('scope') === 'mine' ? 'mine' : 'all'
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('')
@@ -99,8 +100,8 @@ const LeadsPage: React.FC = () => {
   const [leadScope, setLeadScope] = useState<'all' | 'mine'>(scopeFromUrl)
 
   useEffect(() => {
-    setLeadScope(scopeFromUrl)
-  }, [scopeFromUrl])
+    setLeadScope(user?.role === 'employee' ? 'mine' : scopeFromUrl)
+  }, [scopeFromUrl, user?.role])
 
   const [leadSortBy, setLeadSortBy] = useState('createdAt')
   const [leadSortOrder, setLeadSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -619,22 +620,24 @@ const LeadsPage: React.FC = () => {
               )}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Button
-                size="small"
-                variant={leadScope === 'all' ? 'contained' : 'outlined'}
-                onClick={() => {
-                  setLeadScope('all')
-                  setLeadPage(0)
-                  setSearchParams((p) => {
-                    const next = new URLSearchParams(p)
-                    next.delete('scope')
-                    return next
-                  })
-                }}
-                sx={leadScope === 'all' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
-              >
-                Все лиды
-              </Button>
+              {!isEmployee && (
+                <Button
+                  size="small"
+                  variant={leadScope === 'all' ? 'contained' : 'outlined'}
+                  onClick={() => {
+                    setLeadScope('all')
+                    setLeadPage(0)
+                    setSearchParams((p) => {
+                      const next = new URLSearchParams(p)
+                      next.delete('scope')
+                      return next
+                    })
+                  }}
+                  sx={leadScope === 'all' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
+                >
+                  Все лиды
+                </Button>
+              )}
               <Button
                 size="small"
                 variant={leadScope === 'mine' ? 'contained' : 'outlined'}
