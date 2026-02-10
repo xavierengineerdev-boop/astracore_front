@@ -155,6 +155,15 @@ export type LeadNoteItem = {
   updatedAt: string
 }
 
+export type LeadCommentItem = {
+  _id: string
+  leadId: string
+  authorId: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type LeadHistoryAction =
   | 'created'
   | 'updated'
@@ -163,6 +172,9 @@ export type LeadHistoryAction =
   | 'note_added'
   | 'note_edited'
   | 'note_deleted'
+  | 'comment_added'
+  | 'comment_edited'
+  | 'comment_deleted'
   | 'task_added'
   | 'task_updated'
   | 'task_deleted'
@@ -203,6 +215,32 @@ export async function updateLeadNote(leadId: string, noteId: string, content: st
 
 export async function deleteLeadNote(leadId: string, noteId: string): Promise<void> {
   const res = await authenticatedFetch(`${API_BASE}/leads/${leadId}/notes/${noteId}`, { method: 'DELETE' })
+  await parseResponse<{ message: string }>(res)
+}
+
+export async function getLeadComments(leadId: string): Promise<LeadCommentItem[]> {
+  const res = await authenticatedFetch(`${API_BASE}/leads/${leadId}/comments`)
+  return parseResponse<LeadCommentItem[]>(res)
+}
+
+export async function addLeadComment(leadId: string, content: string): Promise<LeadCommentItem> {
+  const res = await authenticatedFetch(`${API_BASE}/leads/${leadId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  })
+  return parseResponse<LeadCommentItem>(res)
+}
+
+export async function updateLeadComment(leadId: string, commentId: string, content: string): Promise<LeadCommentItem> {
+  const res = await authenticatedFetch(`${API_BASE}/leads/${leadId}/comments/${commentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  })
+  return parseResponse<LeadCommentItem>(res)
+}
+
+export async function deleteLeadComment(leadId: string, commentId: string): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}/leads/${leadId}/comments/${commentId}`, { method: 'DELETE' })
   await parseResponse<{ message: string }>(res)
 }
 

@@ -20,6 +20,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import NoteAddIcon from '@mui/icons-material/NoteAdd'
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import TaskAltIcon from '@mui/icons-material/TaskAlt'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import { useAuth } from '@/auth/AuthProvider'
@@ -32,6 +33,10 @@ import {
   addLeadNote,
   updateLeadNote,
   deleteLeadNote,
+  getLeadComments,
+  addLeadComment,
+  updateLeadComment,
+  deleteLeadComment,
   getLeadHistory,
   getLeadTasks,
   addLeadTask,
@@ -43,6 +48,7 @@ import {
   deleteLeadReminder,
   type LeadItem,
   type LeadNoteItem,
+  type LeadCommentItem,
   type LeadHistoryItem,
   type LeadTaskItem,
   type LeadReminderItem,
@@ -77,6 +83,9 @@ const HISTORY_ACTION_LABELS: Record<string, string> = {
   note_added: 'Добавлена заметка',
   note_edited: 'Заметка отредактирована',
   note_deleted: 'Заметка удалена',
+  comment_added: 'Добавлен комментарий',
+  comment_edited: 'Комментарий отредактирован',
+  comment_deleted: 'Комментарий удалён',
   task_added: 'Добавлена задача',
   task_updated: 'Задача изменена',
   task_deleted: 'Задача удалена',
@@ -116,6 +125,15 @@ const LeadCardPage: React.FC = () => {
   const [noteDeleteId, setNoteDeleteId] = useState<string | null>(null)
   const [noteDeleting, setNoteDeleting] = useState(false)
   const [loadingNotes, setLoadingNotes] = useState(false)
+  const [comments, setComments] = useState<LeadCommentItem[]>([])
+  const [commentContent, setCommentContent] = useState('')
+  const [commentSubmitting, setCommentSubmitting] = useState(false)
+  const [commentEditId, setCommentEditId] = useState<string | null>(null)
+  const [commentEditContent, setCommentEditContent] = useState('')
+  const [commentEditSaving, setCommentEditSaving] = useState(false)
+  const [commentDeleteId, setCommentDeleteId] = useState<string | null>(null)
+  const [commentDeleting, setCommentDeleting] = useState(false)
+  const [loadingComments, setLoadingComments] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [tasks, setTasks] = useState<LeadTaskItem[]>([])
   const [reminders, setReminders] = useState<LeadReminderItem[]>([])
@@ -253,6 +271,7 @@ const LeadCardPage: React.FC = () => {
     setLoadingTasks(true)
     setLoadingReminders(true)
     getLeadNotes(id).then(setNotes).catch(() => setNotes([])).finally(() => setLoadingNotes(false))
+    getLeadComments(id).then(setComments).catch(() => setComments([])).finally(() => setLoadingComments(false))
     getLeadHistory(id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false))
     getLeadTasks(id).then(setTasks).catch(() => setTasks([])).finally(() => setLoadingTasks(false))
     getLeadReminders(id).then(setReminders).catch(() => setReminders([])).finally(() => setLoadingReminders(false))
@@ -261,6 +280,7 @@ const LeadCardPage: React.FC = () => {
   const refetchNotesAndHistory = () => {
     if (!id) return
     getLeadNotes(id).then(setNotes).catch(() => setNotes([]))
+    getLeadComments(id).then(setComments).catch(() => setComments([]))
     getLeadHistory(id).then(setHistory).catch(() => setHistory([]))
   }
   const refetchTasksAndReminders = () => {
@@ -415,6 +435,59 @@ const LeadCardPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setNoteDeleting(false)
+    }
+  }
+
+  const canEditOrDeleteComment = (comment: LeadCommentItem) =>
+    isManager || String(comment.authorId) === String(currentUser?.userId)
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id || !commentContent.trim()) return
+    setCommentSubmitting(true)
+    try {
+      await addLeadComment(id, commentContent.trim())
+      setCommentContent('')
+      toast.success('Комментарий добавлен')
+      refetchNotesAndHistory()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCommentSubmitting(false)
+    }
+  }
+
+  const openCommentEdit = (comment: LeadCommentItem) => {
+    setCommentEditId(comment._id)
+    setCommentEditContent(comment.content)
+  }
+  const handleSaveCommentEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id || !commentEditId || !commentEditContent.trim()) return
+    setCommentEditSaving(true)
+    try {
+      await updateLeadComment(id, commentEditId, commentEditContent.trim())
+      setCommentEditId(null)
+      toast.success('Комментарий сохранён')
+      refetchNotesAndHistory()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCommentEditSaving(false)
+    }
+  }
+  const handleDeleteCommentConfirm = async () => {
+    if (!id || !commentDeleteId) return
+    setCommentDeleting(true)
+    try {
+      await deleteLeadComment(id, commentDeleteId)
+      setCommentDeleteId(null)
+      toast.success('Комментарий удалён')
+      refetchNotesAndHistory()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCommentDeleting(false)
     }
   }
 
@@ -574,7 +647,115 @@ const LeadCardPage: React.FC = () => {
         </Box>
         </Paper>
 
-        {/* Заметки — второй столбец */}
+        {/* Комментарии — второй столбец (та же логика, что и заметки; отображаются в истории) */}
+        <Paper
+          sx={{
+            p: 3,
+            flex: { md: 1 },
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif', flexShrink: 0 }}>
+            Комментарии
+          </Typography>
+          <Box component="form" onSubmit={handleAddComment} sx={{ mb: 2, flexShrink: 0 }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Добавить комментарий..."
+              value={commentContent}
+              onChange={(e) => setCommentContent(e.target.value)}
+              disabled={commentSubmitting}
+              sx={{
+                ...formFieldSx,
+                '& .MuiOutlinedInput-root': { minHeight: 72 },
+              }}
+            />
+            <Button
+              type="submit"
+              size="small"
+              startIcon={<ChatBubbleOutlineIcon />}
+              disabled={commentSubmitting || !commentContent.trim()}
+              sx={{ mt: 1, color: 'rgba(167,139,250,0.95)' }}
+            >
+              {commentSubmitting ? 'Добавление…' : 'Добавить комментарий'}
+            </Button>
+          </Box>
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {loadingComments ? (
+            <Box sx={{ py: 2, display: 'flex', justifyContent: 'center' }}>
+              <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
+            </Box>
+          ) : comments.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет комментариев</Typography>
+          ) : (
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.5,
+                pr: 0.5,
+                ...(comments.length > 4 && { maxHeight: 320 }),
+              }}
+            >
+              {comments.map((comment) => (
+                <Box
+                  key={comment._id}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'rgba(255,255,255,0.9)',
+                          overflow: 'hidden',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {comment.content}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>
+                        {assigneeNameMap[comment.authorId] || comment.authorId} · {formatDateTime(comment.createdAt)}
+                      </Typography>
+                    </Box>
+                    {canEditOrDeleteComment(comment) && (
+                      <Box sx={{ display: 'flex', gap: 0, flexShrink: 0 }}>
+                        <IconButton size="small" onClick={() => openCommentEdit(comment)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => setCommentDeleteId(comment._id)} sx={{ color: 'rgba(248,113,113,0.9)' }}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+          </Box>
+        </Paper>
+
+        {/* Заметки — третий столбец */}
         <Paper
           sx={{
             p: 3,
@@ -631,6 +812,7 @@ const LeadCardPage: React.FC = () => {
               flexDirection: 'column',
               gap: 1.5,
               pr: 0.5,
+              ...(notes.length > 4 && { maxHeight: 320 }),
             }}
           >
             {notes.map((note) => (
@@ -679,67 +861,6 @@ const LeadCardPage: React.FC = () => {
           </Box>
         )}
         </Box>
-        </Paper>
-
-        {/* Дополнительная информация (с сайта: IP, метаданные, железо) */}
-        <Paper
-          sx={{
-            p: 3,
-            flex: { md: 1 },
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif', flexShrink: 0 }}>
-            Дополнительная информация
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {(() => {
-            const sm = lead.sourceMeta
-            const rows: { label: string; value: string | undefined }[] = [
-              { label: 'IP', value: sm?.ip },
-              { label: 'User-Agent', value: sm?.userAgent },
-              { label: 'Referrer', value: sm?.referrer },
-              { label: 'Экран', value: sm?.screen },
-              { label: 'Язык', value: sm?.language },
-              { label: 'Платформа', value: sm?.platform },
-              { label: 'Часовой пояс', value: sm?.timezone },
-              { label: 'Память (GB)', value: sm?.deviceMemory },
-              { label: 'Ядра CPU', value: sm?.hardwareConcurrency },
-            ]
-            if (sm?.extra && typeof sm.extra === 'object') {
-              Object.entries(sm.extra).forEach(([k, v]) => {
-                rows.push({ label: k, value: v != null ? String(v) : undefined })
-              })
-            }
-            return (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {rows.map((r, idx) => (
-                  <Box key={`${r.label}-${idx}`}>
-                    <Typography variant="caption" color="rgba(255,255,255,0.5)">{r.label}</Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: r.value ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
-                        wordBreak: 'break-word',
-                        overflow: 'hidden',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                      }}
-                    >
-                      {r.value?.trim() || '—'}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            )
-          })()}
-          </Box>
         </Paper>
       </Box>
 
@@ -1148,6 +1269,10 @@ const LeadCardPage: React.FC = () => {
                   const m = entry.meta as { content?: string }
                   if (m.content) detail = m.content
                 }
+                if ((entry.action === 'comment_added' || entry.action === 'comment_edited') && entry.meta) {
+                  const m = entry.meta as { content?: string }
+                  if (m.content) detail = m.content
+                }
                 if ((entry.action === 'task_added' || entry.action === 'task_updated' || entry.action === 'task_deleted') && entry.meta) {
                   const m = entry.meta as { title?: string; dueAt?: string | null; completed?: boolean }
                   const parts: string[] = []
@@ -1207,6 +1332,63 @@ const LeadCardPage: React.FC = () => {
           )
         })()}
       </Paper>
+
+      {/* Дополнительная информация (с сайта) — перенесена вниз */}
+      {lead && (
+        <Paper
+          sx={{
+            p: 3,
+            mt: 3,
+            maxWidth: 720,
+            bgcolor: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif' }}>
+            Дополнительная информация
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {(() => {
+              const sm = lead.sourceMeta
+              const rows: { label: string; value: string | undefined }[] = [
+                { label: 'IP', value: sm?.ip },
+                { label: 'User-Agent', value: sm?.userAgent },
+                { label: 'Referrer', value: sm?.referrer },
+                { label: 'Экран', value: sm?.screen },
+                { label: 'Язык', value: sm?.language },
+                { label: 'Платформа', value: sm?.platform },
+                { label: 'Часовой пояс', value: sm?.timezone },
+                { label: 'Память (GB)', value: sm?.deviceMemory },
+                { label: 'Ядра CPU', value: sm?.hardwareConcurrency },
+              ]
+              if (sm?.extra && typeof sm.extra === 'object') {
+                Object.entries(sm.extra).forEach(([k, v]) => {
+                  rows.push({ label: k, value: v != null ? String(v) : undefined })
+                })
+              }
+              return rows.map((r, idx) => (
+                <Box key={`${r.label}-${idx}`}>
+                  <Typography variant="caption" color="rgba(255,255,255,0.5)">{r.label}</Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: r.value ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
+                      wordBreak: 'break-word',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
+                    {r.value?.trim() || '—'}
+                  </Typography>
+                </Box>
+              ))
+            })()}
+          </Box>
+        </Paper>
+      )}
 
       <Dialog
         open={editing}
@@ -1415,6 +1597,71 @@ const LeadCardPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
           >
             {noteDeleting ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(commentEditId)}
+        onClose={() => !commentEditSaving && setCommentEditId(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Редактировать комментарий</DialogTitle>
+        <Box component="form" onSubmit={handleSaveCommentEdit}>
+          <DialogContent sx={{ pt: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              label="Текст"
+              value={commentEditContent}
+              onChange={(e) => setCommentEditContent(e.target.value)}
+              required
+              sx={formFieldSx}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCommentEditId(null)} disabled={commentEditSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+              Отмена
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={commentEditSaving || !commentEditContent.trim()}
+              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
+            >
+              {commentEditSaving ? 'Сохранение…' : 'Сохранить'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(commentDeleteId)}
+        onClose={() => !commentDeleting && setCommentDeleteId(null)}
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить комментарий?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>Действие нельзя отменить.</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setCommentDeleteId(null)} disabled={commentDeleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleDeleteCommentConfirm}
+            disabled={commentDeleting}
+            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
+          >
+            {commentDeleting ? 'Удаление…' : 'Удалить'}
           </Button>
         </DialogActions>
       </Dialog>
