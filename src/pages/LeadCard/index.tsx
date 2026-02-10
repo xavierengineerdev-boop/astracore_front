@@ -182,7 +182,7 @@ const LeadCardPage: React.FC = () => {
     let list = history
     if (lead?.createdAt && lead?.createdBy && !hasCreated) {
       list = [
-        { _id: '_created', action: 'created' as const, userId: lead.createdBy, createdAt: lead.createdAt, meta: { name: lead.name } },
+        { _id: '_created', leadId: lead._id, action: 'created' as const, userId: lead.createdBy, createdAt: lead.createdAt, meta: { name: lead.name } },
         ...history,
       ]
     }
