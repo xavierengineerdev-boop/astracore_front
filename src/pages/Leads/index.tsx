@@ -160,6 +160,7 @@ const LeadsPage: React.FC = () => {
   const canBulkDeleteLeads = user?.role === 'super' || user?.role === 'manager'
   const canBulkCreateLeads = user?.role === 'super' || user?.role === 'manager'
   const isEmployee = user?.role === 'employee'
+  const editingLead = leadEditId ? leads.find((l) => l._id === leadEditId) ?? null : null
 
   const assigneeOptions = useMemo(() => {
     if (!departmentDetail) return []
@@ -456,16 +457,22 @@ const LeadsPage: React.FC = () => {
     setLeadSaving(true)
     try {
       if (leadEditId) {
-        await updateLead(leadEditId, {
+        const updatePayload: Parameters<typeof updateLead>[1] = {
           name: leadName.trim(),
           lastName: leadLastName.trim() || undefined,
-          phone: leadPhone.trim() || undefined,
-          phone2: leadPhone2.trim() || undefined,
           email: leadEmail.trim() || undefined,
           email2: leadEmail2.trim() || undefined,
           statusId: leadStatusId || undefined,
           assignedTo: leadAssignedTo,
-        })
+        }
+        if (!isEmployee) {
+          updatePayload.phone = leadPhone.trim() || undefined
+          updatePayload.phone2 = leadPhone2.trim() || undefined
+        } else {
+          if (!editingLead?.phone?.trim()) updatePayload.phone = leadPhone.trim() || undefined
+          if (!editingLead?.phone2?.trim()) updatePayload.phone2 = leadPhone2.trim() || undefined
+        }
+        await updateLead(leadEditId, updatePayload)
         toast.success('Лид обновлён')
       } else {
         await createLead({
@@ -842,7 +849,7 @@ const LeadsPage: React.FC = () => {
               <TableHead>
                 <TableRow>
                   {canBulkEditLeads && (
-                    <TableCell padding="checkbox" sx={{ bgcolor: 'rgba(255,255,255,0.04)' }}>
+                    <TableCell padding="checkbox" sx={{ bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>
                       <Checkbox
                         indeterminate={someSelected && !allSelectedOnPage}
                         checked={allSelectedOnPage}
@@ -851,14 +858,14 @@ const LeadsPage: React.FC = () => {
                       />
                     </TableCell>
                   )}
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Имя</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Фамилия</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Телефон</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Email</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Статус</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Обрабатывает</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Создан</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', p: 0, verticalAlign: 'middle' }}>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Имя</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Фамилия</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Телефон</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Email</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Статус</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Обрабатывает</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Создан</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', p: 0, py: 1, verticalAlign: 'middle' }}>
                     <Tooltip title={leadSortBy === 'updatedAt' ? (leadSortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
                       <Button
                         size="small"
@@ -895,7 +902,7 @@ const LeadsPage: React.FC = () => {
                     </Tooltip>
                   </TableCell>
                   {canCreateLead && (
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }} align="right" />
                   )}
                 </TableRow>
               </TableHead>
@@ -916,7 +923,7 @@ const LeadsPage: React.FC = () => {
                   leads.map((lead) => (
                     <TableRow key={lead._id} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
                       {canBulkEditLeads && (
-                        <TableCell padding="checkbox" sx={{ py: 0 }}>
+                        <TableCell padding="checkbox" sx={{ verticalAlign: 'middle', py: 1 }}>
                           <Checkbox
                             checked={selectedLeadIds.includes(lead._id)}
                             onChange={() => toggleSelectLead(lead._id)}
@@ -925,13 +932,13 @@ const LeadsPage: React.FC = () => {
                         </TableCell>
                       )}
                       <TableCell
-                        sx={{ color: 'rgba(255,255,255,0.95)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                        sx={{ color: 'rgba(255,255,255,0.95)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, verticalAlign: 'middle', py: 1 }}
                         onClick={() => navigate(`/leads/${lead._id}${selectedDepartmentId ? `?departmentId=${selectedDepartmentId}` : ''}`)}
                       >
                         {lead.name}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.lastName || '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'top', py: 0.5 }}>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>{lead.lastName || '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                           <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
                             <Box
@@ -955,7 +962,7 @@ const LeadsPage: React.FC = () => {
                           ) : null}
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'top', py: 0.5 }}>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                           <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
                             <Box
@@ -979,7 +986,7 @@ const LeadsPage: React.FC = () => {
                           ) : null}
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                         {canCreateLead ? (
                           <Select
                             size="small"
@@ -1026,16 +1033,12 @@ const LeadsPage: React.FC = () => {
                           )
                         })() : '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                         {canCreateLead ? (
                           isEmployee ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              {lead.assignedTo?.includes(user?.userId ?? '') ? (
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>На мне</Typography>
-                              ) : (
-                                <Button size="small" variant="outlined" onClick={() => handleLeadAssignedToChange(lead._id, user?.userId ? [user.userId] : [])} disabled={updatingLeadId === lead._id} sx={{ borderColor: 'rgba(167,139,250,0.5)', color: 'rgba(167,139,250,0.95)' }}>Взять на себя</Button>
-                              )}
-                            </Box>
+                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                              {lead.assignedTo?.includes(user?.userId ?? '') ? 'На мне' : (lead.assignedTo?.length ? (lead.assignedTo.map((id) => assigneeNameMap[id] || id).join(', ')) : '— Никого')}
+                            </Typography>
                           ) : (
                             <Select
                               size="small"
@@ -1067,10 +1070,10 @@ const LeadsPage: React.FC = () => {
                           ? (lead.assignedTo.map((id) => assigneeNameMap[id]).filter(Boolean).join(', ') || '—')
                           : '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>{formatDateTime(lead.createdAt)}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>{formatDateTime(lead.updatedAt)}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.createdAt)}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.updatedAt)}</TableCell>
                       {canCreateLead && (
-                        <TableCell align="right" sx={{ py: 0 }}>
+                        <TableCell align="right" sx={{ verticalAlign: 'middle', py: 1 }}>
                           <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 0 }}>
                             <Tooltip title="Редактировать">
                               <IconButton size="small" onClick={() => openLeadEdit(lead)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
@@ -1148,6 +1151,8 @@ const LeadsPage: React.FC = () => {
               value={leadPhone}
               onChange={(e) => setLeadPhone(e.target.value)}
               fullWidth
+              disabled={Boolean(leadEditId && isEmployee && editingLead?.phone?.trim())}
+              helperText={leadEditId && isEmployee && editingLead?.phone?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, ...formFieldSx }}
             />
@@ -1156,6 +1161,8 @@ const LeadsPage: React.FC = () => {
               value={leadPhone2}
               onChange={(e) => setLeadPhone2(e.target.value)}
               fullWidth
+              disabled={Boolean(leadEditId && isEmployee && editingLead?.phone2?.trim())}
+              helperText={leadEditId && isEmployee && editingLead?.phone2?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, ...formFieldSx }}
             />
@@ -1217,9 +1224,6 @@ const LeadsPage: React.FC = () => {
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mt: 0.5 }}>
                     {leadAssignedTo?.length ? leadAssignedTo.map((id) => assigneeNameMap[id] || id).join(', ') : '— Никого'}
                   </Typography>
-                  <Button size="small" variant="outlined" onClick={() => setLeadAssignedTo(user?.userId ? [user.userId] : [])} sx={{ mt: 1, borderColor: 'rgba(167,139,250,0.5)', color: 'rgba(167,139,250,0.95)' }}>
-                    Взять на себя
-                  </Button>
                 </Box>
               ) : (
                 <TextField

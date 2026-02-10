@@ -512,16 +512,22 @@ const LeadCardPage: React.FC = () => {
     }
     setSaving(true)
     try {
-      const updated = await updateLead(id, {
+      const payload: Parameters<typeof updateLead>[1] = {
         name: editName.trim(),
         lastName: editLastName.trim() || undefined,
-        phone: editPhone.trim() || undefined,
-        phone2: editPhone2.trim() || undefined,
         email: editEmail.trim() || undefined,
         email2: editEmail2.trim() || undefined,
         statusId: editStatusId || undefined,
         assignedTo: editAssignedTo,
-      })
+      }
+      if (!isEmployee) {
+        payload.phone = editPhone.trim() || undefined
+        payload.phone2 = editPhone2.trim() || undefined
+      } else {
+        if (!lead?.phone?.trim()) payload.phone = editPhone.trim() || undefined
+        if (!lead?.phone2?.trim()) payload.phone2 = editPhone2.trim() || undefined
+      }
+      const updated = await updateLead(id, payload)
       setLead(updated)
       setEditing(false)
       toast.success('Лид обновлён')
@@ -1478,6 +1484,8 @@ const LeadCardPage: React.FC = () => {
               label="Телефон"
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
+              disabled={isEmployee && !!lead?.phone?.trim()}
+              helperText={isEmployee && lead?.phone?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
               sx={{ mb: 2, ...formFieldSx }}
             />
             <TextField
@@ -1493,6 +1501,8 @@ const LeadCardPage: React.FC = () => {
               label="Телефон 2"
               value={editPhone2}
               onChange={(e) => setEditPhone2(e.target.value)}
+              disabled={isEmployee && !!lead?.phone2?.trim()}
+              helperText={isEmployee && lead?.phone2?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
               sx={{ mb: 2, ...formFieldSx }}
             />
             <TextField
@@ -1529,14 +1539,6 @@ const LeadCardPage: React.FC = () => {
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mt: 0.5 }}>
                     {editAssignedTo?.length ? editAssignedTo.map((id) => assigneeNameMap[id] || id).join(', ') : '— Никого'}
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setEditAssignedTo(currentUser?.userId ? [currentUser.userId] : [])}
-                    sx={{ mt: 1, borderColor: 'rgba(167,139,250,0.5)', color: 'rgba(167,139,250,0.95)' }}
-                  >
-                    Взять на себя
-                  </Button>
                 </Box>
               ) : (
                 <TextField
