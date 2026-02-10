@@ -609,14 +609,34 @@ const LeadCardPage: React.FC = () => {
             <Typography variant="caption" color="rgba(255,255,255,0.5)">Фамилия</Typography>
             <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.95)' }}>{lead.lastName || '—'}</Typography>
           </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.phone || '—'}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Email</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email || '—'}</Typography>
-          </Box>
+          <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
+            <Box
+              sx={lead.phone ? { cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } } : {}}
+              onClick={() => {
+                if (lead.phone?.trim()) {
+                  navigator.clipboard.writeText(lead.phone.trim())
+                  toast.success('Телефон скопирован')
+                }
+              }}
+            >
+              <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон</Typography>
+              <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.phone || '—'}</Typography>
+            </Box>
+          </Tooltip>
+          <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
+            <Box
+              sx={lead.email ? { cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } } : {}}
+              onClick={() => {
+                if (lead.email?.trim()) {
+                  navigator.clipboard.writeText(lead.email.trim())
+                  toast.success('Email скопирован')
+                }
+              }}
+            >
+              <Typography variant="caption" color="rgba(255,255,255,0.5)">Email</Typography>
+              <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email || '—'}</Typography>
+            </Box>
+          </Tooltip>
           <Box>
             <Typography variant="caption" color="rgba(255,255,255,0.5)">Статус</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>

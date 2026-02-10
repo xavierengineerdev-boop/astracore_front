@@ -917,8 +917,38 @@ const LeadsPage: React.FC = () => {
                         {lead.name}
                       </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.lastName || '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.phone || '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.email || '—'}</TableCell>
+                      <TableCell
+                        sx={{
+                          color: 'rgba(255,255,255,0.8)',
+                          ...(lead.phone && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }),
+                        }}
+                        onClick={() => {
+                          if (lead.phone?.trim()) {
+                            navigator.clipboard.writeText(lead.phone.trim())
+                            toast.success('Телефон скопирован')
+                          }
+                        }}
+                      >
+                        <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
+                          <span>{lead.phone || '—'}</span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          color: 'rgba(255,255,255,0.8)',
+                          ...(lead.email && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }),
+                        }}
+                        onClick={() => {
+                          if (lead.email?.trim()) {
+                            navigator.clipboard.writeText(lead.email.trim())
+                            toast.success('Email скопирован')
+                          }
+                        }}
+                      >
+                        <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
+                          <span>{lead.email || '—'}</span>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
                         {canCreateLead ? (
                           <Select
