@@ -33,6 +33,8 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import CloseIcon from '@mui/icons-material/Close'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
@@ -773,6 +775,7 @@ const LeadsPage: React.FC = () => {
                 </LocalizationProvider>
                 <TextField select label="Сортировка" value={leadSortBy} onChange={(e) => { setLeadSortBy(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}>
                   <MenuItem value="createdAt">По дате создания</MenuItem>
+                  <MenuItem value="updatedAt">По дате изменения</MenuItem>
                   <MenuItem value="name">По имени</MenuItem>
                   <MenuItem value="phone">По телефону</MenuItem>
                   <MenuItem value="email">По email</MenuItem>
@@ -841,7 +844,42 @@ const LeadsPage: React.FC = () => {
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Статус</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Обрабатывает</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Создан</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Изменён</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', p: 0, verticalAlign: 'middle' }}>
+                    <Tooltip title={leadSortBy === 'updatedAt' ? (leadSortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
+                      <Button
+                        size="small"
+                        endIcon={
+                          leadSortBy === 'updatedAt' ? (
+                            leadSortOrder === 'desc' ? (
+                              <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                            ) : (
+                              <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                            )
+                          ) : (
+                            <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
+                          )
+                        }
+                        onClick={() => {
+                          if (leadSortBy === 'updatedAt') {
+                            setLeadSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+                          } else {
+                            setLeadSortBy('updatedAt')
+                            setLeadSortOrder('desc')
+                          }
+                          setLeadPage(0)
+                        }}
+                        sx={{
+                          color: leadSortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
+                          textTransform: 'none',
+                          minWidth: 0,
+                          py: 0.5,
+                          px: 1,
+                        }}
+                      >
+                        Изменён
+                      </Button>
+                    </Tooltip>
+                  </TableCell>
                   {canCreateLead && (
                     <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
                   )}
