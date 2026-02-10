@@ -121,7 +121,9 @@ const LeadsPage: React.FC = () => {
   const [leadName, setLeadName] = useState('')
   const [leadLastName, setLeadLastName] = useState('')
   const [leadPhone, setLeadPhone] = useState('')
+  const [leadPhone2, setLeadPhone2] = useState('')
   const [leadEmail, setLeadEmail] = useState('')
+  const [leadEmail2, setLeadEmail2] = useState('')
   const [leadStatusId, setLeadStatusId] = useState('')
   const [leadAssignedTo, setLeadAssignedTo] = useState<string[]>([])
   const [leadSaving, setLeadSaving] = useState(false)
@@ -423,7 +425,9 @@ const LeadsPage: React.FC = () => {
     setLeadEditId(null)
     setLeadName('')
     setLeadPhone('')
+    setLeadPhone2('')
     setLeadEmail('')
+    setLeadEmail2('')
     setLeadStatusId('')
     setLeadAssignedTo([])
     setLeadLastName('')
@@ -435,7 +439,9 @@ const LeadsPage: React.FC = () => {
     setLeadName(lead.name)
     setLeadLastName(lead.lastName ?? '')
     setLeadPhone(lead.phone ?? '')
+    setLeadPhone2(lead.phone2 ?? '')
     setLeadEmail(lead.email ?? '')
+    setLeadEmail2(lead.email2 ?? '')
     setLeadStatusId(lead.statusId ?? '')
     setLeadAssignedTo(lead.assignedTo ?? [])
     setLeadFormOpen(true)
@@ -451,7 +457,9 @@ const LeadsPage: React.FC = () => {
           name: leadName.trim(),
           lastName: leadLastName.trim() || undefined,
           phone: leadPhone.trim() || undefined,
+          phone2: leadPhone2.trim() || undefined,
           email: leadEmail.trim() || undefined,
+          email2: leadEmail2.trim() || undefined,
           statusId: leadStatusId || undefined,
           assignedTo: leadAssignedTo,
         })
@@ -461,7 +469,9 @@ const LeadsPage: React.FC = () => {
           name: leadName.trim(),
           lastName: leadLastName.trim() || undefined,
           phone: leadPhone.trim() || undefined,
+          phone2: leadPhone2.trim() || undefined,
           email: leadEmail.trim() || undefined,
+          email2: leadEmail2.trim() || undefined,
           departmentId: selectedDepartmentId,
           statusId: leadStatusId || undefined,
           source: 'manual',
@@ -917,37 +927,53 @@ const LeadsPage: React.FC = () => {
                         {lead.name}
                       </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.lastName || '—'}</TableCell>
-                      <TableCell
-                        sx={{
-                          color: 'rgba(255,255,255,0.8)',
-                          ...(lead.phone && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }),
-                        }}
-                        onClick={() => {
-                          if (lead.phone?.trim()) {
-                            navigator.clipboard.writeText(lead.phone.trim())
-                            toast.success('Телефон скопирован')
-                          }
-                        }}
-                      >
-                        <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
-                          <span>{lead.phone || '—'}</span>
-                        </Tooltip>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'top', py: 0.5 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                          <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
+                            <Box
+                              component="span"
+                              sx={{ ...(lead.phone && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }) }}
+                              onClick={(e) => { e.stopPropagation(); if (lead.phone?.trim()) { navigator.clipboard.writeText(lead.phone.trim()); toast.success('Телефон скопирован') } }}
+                            >
+                              {lead.phone || '—'}
+                            </Box>
+                          </Tooltip>
+                          {(lead.phone2 ?? '').trim() ? (
+                            <Tooltip title="Нажмите, чтобы скопировать">
+                              <Box
+                                component="span"
+                                sx={{ fontSize: '0.85rem', opacity: 0.9, cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((lead.phone2 ?? '').trim()); toast.success('Телефон 2 скопирован') }}
+                              >
+                                {lead.phone2?.trim()}
+                              </Box>
+                            </Tooltip>
+                          ) : null}
+                        </Box>
                       </TableCell>
-                      <TableCell
-                        sx={{
-                          color: 'rgba(255,255,255,0.8)',
-                          ...(lead.email && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }),
-                        }}
-                        onClick={() => {
-                          if (lead.email?.trim()) {
-                            navigator.clipboard.writeText(lead.email.trim())
-                            toast.success('Email скопирован')
-                          }
-                        }}
-                      >
-                        <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
-                          <span>{lead.email || '—'}</span>
-                        </Tooltip>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'top', py: 0.5 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                          <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
+                            <Box
+                              component="span"
+                              sx={{ ...(lead.email && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }) }}
+                              onClick={(e) => { e.stopPropagation(); if (lead.email?.trim()) { navigator.clipboard.writeText(lead.email.trim()); toast.success('Email скопирован') } }}
+                            >
+                              {lead.email || '—'}
+                            </Box>
+                          </Tooltip>
+                          {(lead.email2 ?? '').trim() ? (
+                            <Tooltip title="Нажмите, чтобы скопировать">
+                              <Box
+                                component="span"
+                                sx={{ fontSize: '0.85rem', opacity: 0.9, cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((lead.email2 ?? '').trim()); toast.success('Email 2 скопирован') }}
+                              >
+                                {lead.email2?.trim()}
+                              </Box>
+                            </Tooltip>
+                          ) : null}
+                        </Box>
                       </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
                         {canCreateLead ? (
@@ -1122,10 +1148,27 @@ const LeadsPage: React.FC = () => {
               sx={{ mb: 2, ...formFieldSx }}
             />
             <TextField
+              label="Телефон 2"
+              value={leadPhone2}
+              onChange={(e) => setLeadPhone2(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <TextField
               label="Email"
               type="email"
               value={leadEmail}
               onChange={(e) => setLeadEmail(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <TextField
+              label="Email 2"
+              type="email"
+              value={leadEmail2}
+              onChange={(e) => setLeadEmail2(e.target.value)}
               fullWidth
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, ...formFieldSx }}

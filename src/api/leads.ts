@@ -31,7 +31,9 @@ export type LeadItem = {
   name: string
   lastName: string
   phone: string
+  phone2?: string
   email: string
+  email2?: string
   departmentId: string
   statusId: string | null
   source: string
@@ -105,7 +107,9 @@ export async function createLead(data: {
   name: string
   lastName?: string
   phone?: string
+  phone2?: string
   email?: string
+  email2?: string
   departmentId: string
   statusId?: string
   comment?: string
@@ -122,7 +126,7 @@ export async function createLead(data: {
 
 export async function updateLead(
   id: string,
-  data: { name?: string; lastName?: string; phone?: string; email?: string; statusId?: string; assignedTo?: string[] },
+  data: { name?: string; lastName?: string; phone?: string; phone2?: string; email?: string; email2?: string; statusId?: string; assignedTo?: string[] },
 ): Promise<LeadItem> {
   const res = await authenticatedFetch(`${API_BASE}/leads/${id}`, {
     method: 'PATCH',

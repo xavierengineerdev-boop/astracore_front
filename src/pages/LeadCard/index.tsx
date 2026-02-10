@@ -111,7 +111,9 @@ const LeadCardPage: React.FC = () => {
   const [editName, setEditName] = useState('')
   const [editLastName, setEditLastName] = useState('')
   const [editPhone, setEditPhone] = useState('')
+  const [editPhone2, setEditPhone2] = useState('')
   const [editEmail, setEditEmail] = useState('')
+  const [editEmail2, setEditEmail2] = useState('')
   const [editStatusId, setEditStatusId] = useState('')
   const [editAssignedTo, setEditAssignedTo] = useState<string[]>([])
 
@@ -390,7 +392,9 @@ const LeadCardPage: React.FC = () => {
     setEditName(lead.name)
     setEditLastName(lead.lastName ?? '')
     setEditPhone(lead.phone ?? '')
+    setEditPhone2(lead.phone2 ?? '')
     setEditEmail(lead.email ?? '')
+    setEditEmail2(lead.email2 ?? '')
     setEditStatusId(lead.statusId ?? '')
     setEditAssignedTo(lead.assignedTo ?? [])
     setEditing(true)
@@ -512,7 +516,9 @@ const LeadCardPage: React.FC = () => {
         name: editName.trim(),
         lastName: editLastName.trim() || undefined,
         phone: editPhone.trim() || undefined,
+        phone2: editPhone2.trim() || undefined,
         email: editEmail.trim() || undefined,
+        email2: editEmail2.trim() || undefined,
         statusId: editStatusId || undefined,
         assignedTo: editAssignedTo,
       })
@@ -637,6 +643,28 @@ const LeadCardPage: React.FC = () => {
               <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email || '—'}</Typography>
             </Box>
           </Tooltip>
+          {(lead.phone2 ?? '').trim() ? (
+            <Tooltip title="Нажмите, чтобы скопировать">
+              <Box
+                sx={{ cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } }}
+                onClick={() => { navigator.clipboard.writeText((lead.phone2 ?? '').trim()); toast.success('Телефон 2 скопирован') }}
+              >
+                <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон 2</Typography>
+                <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.phone2?.trim()}</Typography>
+              </Box>
+            </Tooltip>
+          ) : null}
+          {(lead.email2 ?? '').trim() ? (
+            <Tooltip title="Нажмите, чтобы скопировать">
+              <Box
+                sx={{ cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } }}
+                onClick={() => { navigator.clipboard.writeText((lead.email2 ?? '').trim()); toast.success('Email 2 скопирован') }}
+              >
+                <Typography variant="caption" color="rgba(255,255,255,0.5)">Email 2</Typography>
+                <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email2?.trim()}</Typography>
+              </Box>
+            </Tooltip>
+          ) : null}
           <Box>
             <Typography variant="caption" color="rgba(255,255,255,0.5)">Статус</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
@@ -1458,6 +1486,21 @@ const LeadCardPage: React.FC = () => {
               type="email"
               value={editEmail}
               onChange={(e) => setEditEmail(e.target.value)}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <TextField
+              fullWidth
+              label="Телефон 2"
+              value={editPhone2}
+              onChange={(e) => setEditPhone2(e.target.value)}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <TextField
+              fullWidth
+              label="Email 2"
+              type="email"
+              value={editEmail2}
+              onChange={(e) => setEditEmail2(e.target.value)}
               sx={{ mb: 2, ...formFieldSx }}
             />
             <TextField
