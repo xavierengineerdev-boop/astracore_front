@@ -75,6 +75,7 @@ export async function getLeadsByDepartment(
     email?: string
     statusId?: string
     assignedTo?: string
+    unassignedOnly?: boolean
     dateFrom?: string
     dateTo?: string
     sortBy?: string
@@ -90,6 +91,7 @@ export async function getLeadsByDepartment(
   if (params?.email?.trim()) sp.set('email', params.email.trim())
   if (params?.statusId?.trim()) sp.set('statusId', params.statusId.trim())
   if (params?.assignedTo?.trim()) sp.set('assignedTo', params.assignedTo.trim())
+  if (params?.unassignedOnly === true) sp.set('unassignedOnly', 'true')
   if (params?.dateFrom?.trim()) sp.set('dateFrom', params.dateFrom.trim())
   if (params?.dateTo?.trim()) sp.set('dateTo', params.dateTo.trim())
   if (params?.sortBy?.trim()) sp.set('sortBy', params.sortBy.trim())

@@ -49,6 +49,7 @@ import {
   deleteStatus,
   type StatusItem,
 } from '@/api/statuses'
+import { API_BASE } from '@/api/client'
 import {
   getSitesByDepartment,
   createSite,
@@ -411,6 +412,12 @@ const DepartmentCardPage: React.FC = () => {
 
   const copyToken = (token: string) => {
     navigator.clipboard.writeText(token).then(() => toast.success('Токен скопирован'))
+  }
+
+  const copyWidgetScript = (siteId: string) => {
+    const scriptUrl = `${API_BASE}/sites/${siteId}/widget.js`
+    const snippet = `<div id="astracore-lead-form"></div>\n<script src="${scriptUrl}"><\/script>`
+    navigator.clipboard.writeText(snippet).then(() => toast.success('Скрипт скопирован — вставьте на сайт'))
   }
 
   const handleSiteDelete = async () => {
@@ -853,6 +860,7 @@ const DepartmentCardPage: React.FC = () => {
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>URL</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Описание</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 140, bgcolor: 'rgba(255,255,255,0.04)' }}>Токен</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 120, bgcolor: 'rgba(255,255,255,0.04)' }}>Скрипт</TableCell>
                   {canManageSites && (
                     <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
                   )}
@@ -861,13 +869,13 @@ const DepartmentCardPage: React.FC = () => {
               <TableBody>
                 {siteLoading ? (
                   <TableRow>
-                    <TableCell colSpan={canManageSites ? 4 : 3} sx={{ py: 2, textAlign: 'center' }}>
+                    <TableCell colSpan={canManageSites ? 5 : 4} sx={{ py: 2, textAlign: 'center' }}>
                       <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
                     </TableCell>
                   </TableRow>
                 ) : sites.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManageSites ? 4 : 3} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
+                    <TableCell colSpan={canManageSites ? 5 : 4} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
                       {canManageSites ? 'Нет сайтов. Нажмите «Добавить сайт» и передайте токен на сайт.' : 'Нет сайтов.'}
                     </TableCell>
                   </TableRow>
@@ -897,6 +905,24 @@ const DepartmentCardPage: React.FC = () => {
                         ) : (
                           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)' }}>—</Typography>
                         )}
+                      </TableCell>
+                      <TableCell sx={{ py: 0 }}>
+                        <Tooltip title="Скопировать код для вставки на сайт (скрипт уже с токеном)">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />}
+                            onClick={() => copyWidgetScript(site._id)}
+                            sx={{
+                              borderColor: 'rgba(46,196,182,0.4)',
+                              color: 'rgba(94,234,212,0.95)',
+                              textTransform: 'none',
+                              '&:hover': { borderColor: 'rgba(46,196,182,0.8)', bgcolor: 'rgba(46,196,182,0.08)' },
+                            }}
+                          >
+                            Скрипт
+                          </Button>
+                        </Tooltip>
                       </TableCell>
                       {canManageSites && (
                         <TableCell align="right" sx={{ py: 0 }}>

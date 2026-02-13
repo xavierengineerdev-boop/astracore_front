@@ -242,6 +242,13 @@ const LeadsPage: React.FC = () => {
     const pageToUse = deptChanged ? 0 : leadPage
     let cancelled = false
     setLeadLoading(true)
+    // «Все лиды» — только неназначенные (никому не переданы); при выборе фильтра «Обрабатывает» — лиды этого исполнителя.
+    // «Мои лиды» — только лиды, назначенные на текущего пользователя.
+    const assignedToParam =
+      leadScope === 'mine' && user?.userId
+        ? user.userId
+        : leadFilterAssignedTo?.trim() || undefined
+    const unassignedOnly = leadScope === 'all' && !assignedToParam
     const filterParams = {
       skip: pageToUse * leadRowsPerPage,
       limit: leadRowsPerPage,
@@ -249,8 +256,8 @@ const LeadsPage: React.FC = () => {
       ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
       ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
       ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
-      ...(leadFilterAssignedTo && { assignedTo: leadFilterAssignedTo }),
-      ...(leadScope === 'mine' && user?.userId && { assignedTo: user.userId }),
+      ...(assignedToParam && { assignedTo: assignedToParam }),
+      ...(unassignedOnly && { unassignedOnly: true }),
       ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
       ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
       sortBy: leadSortBy,
@@ -300,6 +307,11 @@ const LeadsPage: React.FC = () => {
     if (!selectedDepartmentId) return
     setLeadLoading(true)
     try {
+      const assignedToParam =
+        leadScope === 'mine' && user?.userId
+          ? user.userId
+          : leadFilterAssignedTo?.trim() || undefined
+      const unassignedOnly = leadScope === 'all' && !assignedToParam
       const data = await getLeadsByDepartment(selectedDepartmentId, {
         skip: leadPage * leadRowsPerPage,
         limit: leadRowsPerPage,
@@ -307,8 +319,8 @@ const LeadsPage: React.FC = () => {
         ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
         ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
         ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
-        ...(leadFilterAssignedTo && { assignedTo: leadFilterAssignedTo }),
-        ...(leadScope === 'mine' && user?.userId && { assignedTo: user.userId }),
+        ...(assignedToParam && { assignedTo: assignedToParam }),
+        ...(unassignedOnly && { unassignedOnly: true }),
         ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
         ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
         sortBy: leadSortBy,
@@ -356,9 +368,15 @@ const LeadsPage: React.FC = () => {
     setUpdatingLeadId(leadId)
     try {
       await updateLead(leadId, { assignedTo })
-      setLeads((prev) =>
-        prev.map((l) => (l._id === leadId ? { ...l, assignedTo } : l)),
-      )
+      const isUnassignedOnlyList = leadScope === 'all' && !leadFilterAssignedTo?.trim()
+      if (isUnassignedOnlyList && assignedTo.length > 0) {
+        setLeads((prev) => prev.filter((l) => l._id !== leadId))
+        setLeadTotal((prev) => Math.max(0, prev - 1))
+      } else {
+        setLeads((prev) =>
+          prev.map((l) => (l._id === leadId ? { ...l, assignedTo } : l)),
+        )
+      }
       toast.success('Назначение обновлено')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
