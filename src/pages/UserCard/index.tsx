@@ -30,6 +30,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import ContactPageIcon from '@mui/icons-material/ContactPage'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
@@ -93,6 +94,8 @@ const UserCardPage: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [removeFromDeptConfirmOpen, setRemoveFromDeptConfirmOpen] = useState(false)
+  const [removingFromDept, setRemovingFromDept] = useState(false)
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editFirstName, setEditFirstName] = useState('')
@@ -219,15 +222,23 @@ const UserCardPage: React.FC = () => {
   const canEditThisUser =
     isOwnProfile ||
     currentUser?.role === 'super' ||
-    (currentUser?.role === 'admin' && user && ['manager', 'employee'].includes(user.role))
+    (currentUser?.role === 'admin' && user && ['manager', 'employee'].includes(user.role)) ||
+    (currentUser?.role === 'manager' && user?.role === 'employee' && String(user.departmentId) === String((currentUser as { departmentId?: string }).departmentId))
   const canDeleteThisUser =
     !isOwnProfile &&
     (currentUser?.role === 'super' ||
-      (currentUser?.role === 'admin' && user && ['manager', 'employee'].includes(user.role)))
+      (currentUser?.role === 'admin' && user && ['manager', 'employee'].includes(user.role)) ||
+      (currentUser?.role === 'manager' && user?.role === 'employee' && String(user.departmentId) === String((currentUser as { departmentId?: string }).departmentId)))
   const canEditRole =
     !isOwnProfile &&
     creatableRoles.length > 0 &&
     (currentUser?.role === 'super' || (currentUser?.role === 'admin' && ['manager', 'employee'].includes(user.role)))
+  const canRemoveFromDept =
+    !isOwnProfile &&
+    currentUser?.role === 'manager' &&
+    user?.role === 'employee' &&
+    user?.departmentId &&
+    String(user.departmentId) === String((currentUser as { departmentId?: string }).departmentId)
 
   const cancelEdit = () => {
     setEditing(false)
@@ -274,6 +285,21 @@ const UserCardPage: React.FC = () => {
     }
   }
 
+  const handleRemoveFromDeptConfirm = async () => {
+    if (!id) return
+    setRemovingFromDept(true)
+    try {
+      const updated = await updateUser(id, { departmentId: '' })
+      setUser(updated)
+      setRemoveFromDeptConfirmOpen(false)
+      toast.success('Сотрудник убран из отдела')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setRemovingFromDept(false)
+    }
+  }
+
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -299,6 +325,13 @@ const UserCardPage: React.FC = () => {
           <Tooltip title="Редактировать">
             <IconButton onClick={startEdit} sx={{ color: 'rgba(167,139,250,0.9)' }} size="medium">
               <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        {canRemoveFromDept ? (
+          <Tooltip title="Удалить из отдела">
+            <IconButton onClick={() => setRemoveFromDeptConfirmOpen(true)} sx={{ color: 'rgba(251,191,36,0.9)' }} size="medium">
+              <PersonRemoveIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         ) : null}
@@ -783,6 +816,41 @@ const UserCardPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
           >
             {deleting ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Подтверждение: убрать из отдела */}
+      <Dialog
+        open={removeFromDeptConfirmOpen}
+        onClose={() => !removingFromDept && setRemoveFromDeptConfirmOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(18, 22, 36, 0.98)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>
+          Удалить сотрудника из отдела?
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            {user?.email} будет убран из вашего отдела. Учётная запись останется, пользователь сможет быть назначен в другой отдел.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRemoveFromDeptConfirmOpen(false)} disabled={removingFromDept} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRemoveFromDeptConfirm}
+            disabled={removingFromDept}
+            sx={{ bgcolor: 'rgba(251,191,36,0.8)', color: '#000', '&:hover': { bgcolor: 'rgba(251,191,36,1)' } }}
+          >
+            {removingFromDept ? '…' : 'Удалить из отдела'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -41,7 +41,7 @@ import {
   type DepartmentDetail,
   type DepartmentItem,
 } from '@/api/departments'
-import { getUsers, updateUser, createUser, type UserItem } from '@/api/users'
+import { getUsers, updateUser, createUser, deleteUser, type UserItem } from '@/api/users'
 import {
   getStatusesByDepartment,
   createStatus,
@@ -88,6 +88,8 @@ const DepartmentCardPage: React.FC = () => {
   const [createEmployeeSaving, setCreateEmployeeSaving] = useState(false)
   const [addingEmployee, setAddingEmployee] = useState(false)
   const [removingUserId, setRemovingUserId] = useState<string | null>(null)
+  const [deleteEmployeeTarget, setDeleteEmployeeTarget] = useState<UserItem | null>(null)
+  const [deletingEmployee, setDeletingEmployee] = useState(false)
   const isEmployeeOwnDept =
     currentUser?.role === 'employee' &&
     id &&
@@ -102,6 +104,7 @@ const DepartmentCardPage: React.FC = () => {
   )
   const canManage = currentUser?.role === 'super' || isManagerOfThisDept
   const canAssignEmployees = currentUser?.role === 'super' || currentUser?.role === 'admin'
+  const canShowEmployeeActions = canAssignEmployees || isManagerOfThisDept
   const canManageStatuses = currentUser?.role === 'super' || isManagerOfThisDept
   const canManageSites = canManageStatuses
 
@@ -440,15 +443,32 @@ const DepartmentCardPage: React.FC = () => {
     if (!id) return
     setRemovingUserId(userId)
     try {
-      await updateUser(userId, { departmentId: undefined })
+      await updateUser(userId, { departmentId: '' })
       await refetchDepartment()
-      const userList = await getUsers()
-      setUsers(userList)
+      if (canAssignEmployees) {
+        const userList = await getUsers()
+        setUsers(userList)
+      }
       toast.success('Сотрудник убран из отдела')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setRemovingUserId(null)
+    }
+  }
+
+  const handleDeleteEmployeeConfirm = async () => {
+    if (!deleteEmployeeTarget) return
+    setDeletingEmployee(true)
+    try {
+      await deleteUser(deleteEmployeeTarget._id)
+      toast.success('Пользователь удалён')
+      setDeleteEmployeeTarget(null)
+      await refetchDepartment()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка удаления')
+    } finally {
+      setDeletingEmployee(false)
     }
   }
 
@@ -660,16 +680,16 @@ const DepartmentCardPage: React.FC = () => {
               <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Имя</TableCell>
               <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Email</TableCell>
               <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Роль</TableCell>
-              {canAssignEmployees && (
-                <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
+              {canShowEmployeeActions && (
+                <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 120, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
               )}
             </TableRow>
           </TableHead>
           <TableBody>
             {department.employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canAssignEmployees ? 4 : 3} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
-                  {canAssignEmployees
+                <TableCell colSpan={canShowEmployeeActions ? 4 : 3} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
+                  {canManage
                     ? 'Нет сотрудников в отделе. Нажмите «Добавить сотрудника».'
                     : 'Нет сотрудников в отделе.'}
                 </TableCell>
@@ -698,24 +718,61 @@ const DepartmentCardPage: React.FC = () => {
                   <TableCell sx={{ color: 'rgba(255,255,255,0.7)', cursor: 'pointer' }} onClick={() => navigate(`/users/${u._id}`)}>
                     {ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role}
                   </TableCell>
-                  {canAssignEmployees && (
+                  {canShowEmployeeActions && (
                     <TableCell align="right" sx={{ py: 0 }} onClick={(e) => e.stopPropagation()}>
-                      {department.managerId !== u._id ? (
-                        <Tooltip title="Убрать из отдела">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleRemoveFromDepartment(u._id)}
-                            disabled={removingUserId === u._id}
-                            sx={{ color: 'rgba(248,113,113,0.8)' }}
-                          >
-                            {removingUserId === u._id ? (
-                              <CircularProgress size={20} sx={{ color: 'rgba(248,113,113,0.8)' }} />
-                            ) : (
-                              <PersonRemoveIcon fontSize="small" />
-                            )}
-                          </IconButton>
-                        </Tooltip>
-                      ) : null}
+                      <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                        {isManagerOfThisDept && u.role === 'employee' ? (
+                          <>
+                            <Tooltip title="Редактировать">
+                              <IconButton
+                                size="small"
+                                onClick={() => navigate(`/users/${u._id}`)}
+                                sx={{ color: 'rgba(167,139,250,0.9)' }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Убрать из отдела">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveFromDepartment(u._id)}
+                                disabled={removingUserId === u._id}
+                                sx={{ color: 'rgba(251,191,36,0.9)' }}
+                              >
+                                {removingUserId === u._id ? (
+                                  <CircularProgress size={20} sx={{ color: 'rgba(251,191,36,0.9)' }} />
+                                ) : (
+                                  <PersonRemoveIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Удалить">
+                              <IconButton
+                                size="small"
+                                onClick={() => setDeleteEmployeeTarget(u)}
+                                sx={{ color: 'rgba(248,113,113,0.9)' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        ) : canAssignEmployees && department.managerId !== u._id ? (
+                          <Tooltip title="Убрать из отдела">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveFromDepartment(u._id)}
+                              disabled={removingUserId === u._id}
+                              sx={{ color: 'rgba(248,113,113,0.8)' }}
+                            >
+                              {removingUserId === u._id ? (
+                                <CircularProgress size={20} sx={{ color: 'rgba(248,113,113,0.8)' }} />
+                              ) : (
+                                <PersonRemoveIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        ) : null}
+                      </Box>
                     </TableCell>
                   )}
                 </TableRow>
@@ -1061,6 +1118,34 @@ const DepartmentCardPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
           >
             {statusDeleting ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteEmployeeTarget)}
+        onClose={() => !deletingEmployee && setDeleteEmployeeTarget(null)}
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить пользователя?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            {deleteEmployeeTarget?.email} — действие нельзя отменить.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteEmployeeTarget(null)} disabled={deletingEmployee} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleDeleteEmployeeConfirm}
+            disabled={deletingEmployee}
+            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
+          >
+            {deletingEmployee ? 'Удаление…' : 'Удалить'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -24,12 +24,13 @@ import {
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
-import { getUsers, createUser, deleteUser, type UserItem } from '@/api/users'
+import { getUsers, createUser, updateUser, deleteUser, type UserItem } from '@/api/users'
 import { getDepartments, type DepartmentItem } from '@/api/departments'
 
 function formatDate(iso: string): string {
@@ -69,12 +70,23 @@ const UsersPage: React.FC = () => {
   const canAccess = creatableRoles.length > 0
   const [deleteTarget, setDeleteTarget] = useState<UserItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [removeFromDeptTarget, setRemoveFromDeptTarget] = useState<UserItem | null>(null)
+  const [removingFromDept, setRemovingFromDept] = useState(false)
 
   const canEditUser = (u: UserItem) =>
-    user?.role === 'super' || (user?.role === 'admin' && ['manager', 'employee'].includes(u.role))
+    user?.role === 'super' ||
+    (user?.role === 'admin' && ['manager', 'employee'].includes(u.role)) ||
+    (user?.role === 'manager' && u.role === 'employee' && String(u.departmentId) === String((user as { departmentId?: string }).departmentId))
   const canDeleteUser = (u: UserItem) =>
     String(u._id) !== String(user?.userId) &&
-    (user?.role === 'super' || (user?.role === 'admin' && ['manager', 'employee'].includes(u.role)))
+    (user?.role === 'super' ||
+      (user?.role === 'admin' && ['manager', 'employee'].includes(u.role)) ||
+      (user?.role === 'manager' && u.role === 'employee' && String(u.departmentId) === String((user as { departmentId?: string }).departmentId)))
+  const canRemoveFromDept = (u: UserItem) =>
+    user?.role === 'manager' &&
+    u.role === 'employee' &&
+    u.departmentId &&
+    String(u.departmentId) === String((user as { departmentId?: string }).departmentId)
 
   useEffect(() => {
     if (!canAccess) {
@@ -149,6 +161,22 @@ const UsersPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Ошибка удаления')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleRemoveFromDeptConfirm = async () => {
+    if (!removeFromDeptTarget) return
+    setRemovingFromDept(true)
+    try {
+      await updateUser(removeFromDeptTarget._id, { departmentId: '' })
+      toast.success('Сотрудник убран из отдела')
+      setRemoveFromDeptTarget(null)
+      const data = await getUsers()
+      setList(data)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setRemovingFromDept(false)
     }
   }
 
@@ -405,6 +433,17 @@ const UsersPage: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                         ) : null}
+                        {canRemoveFromDept(u) ? (
+                          <Tooltip title="Удалить из отдела">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => { e.stopPropagation(); setRemoveFromDeptTarget(u) }}
+                              sx={{ color: 'rgba(251,191,36,0.9)' }}
+                            >
+                              <PersonRemoveIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ) : null}
                         {canDeleteUser(u) ? (
                           <Tooltip title="Удалить">
                             <IconButton
@@ -456,6 +495,40 @@ const UsersPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
           >
             {deleting ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(removeFromDeptTarget)}
+        onClose={() => !removingFromDept && setRemoveFromDeptTarget(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(18, 22, 36, 0.98)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>
+          Удалить сотрудника из отдела?
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            {removeFromDeptTarget?.email} будет убран из вашего отдела. Учётная запись останется.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRemoveFromDeptTarget(null)} disabled={removingFromDept} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRemoveFromDeptConfirm}
+            disabled={removingFromDept}
+            sx={{ bgcolor: 'rgba(251,191,36,0.8)', color: '#000', '&:hover': { bgcolor: 'rgba(251,191,36,1)' } }}
+          >
+            {removingFromDept ? '…' : 'Удалить из отдела'}
           </Button>
         </DialogActions>
       </Dialog>
