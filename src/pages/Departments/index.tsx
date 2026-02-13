@@ -50,7 +50,7 @@ const DepartmentsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false)
   const [name, setName] = useState('')
   const [managerId, setManagerId] = useState('')
-  const canAccess = user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager'
+  const canAccess = user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager' || user?.role === 'employee'
   const canManage = user?.role === 'super'
   const [deleteTarget, setDeleteTarget] = useState<DepartmentItem | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -130,7 +130,7 @@ const DepartmentsPage: React.FC = () => {
         <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600, mb: 2 }}>
           Отделы
         </Typography>
-        <Typography color="rgba(255,255,255,0.6)">Нет доступа. Просматривать отделы могут супер и администратор.</Typography>
+        <Typography color="rgba(255,255,255,0.6)">Нет доступа.</Typography>
       </Box>
     )
   }
