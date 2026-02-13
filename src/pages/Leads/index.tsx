@@ -205,8 +205,13 @@ const LeadsPage: React.FC = () => {
       getDepartments()
         .then((list) => {
           if (!cancelled) {
-            setDepartments(list)
-            if (list.length > 0 && !selectedDepartmentId) setSelectedDepartmentId(list[0]._id)
+            const managerDeptId = user?.role === 'manager' ? (user as { departmentId?: string }).departmentId : undefined
+            const filtered =
+              managerDeptId
+                ? list.filter((d) => String(d._id) === String(managerDeptId))
+                : list
+            setDepartments(filtered)
+            if (filtered.length > 0 && !selectedDepartmentId) setSelectedDepartmentId(filtered[0]._id)
           }
         })
         .catch(() => { if (!cancelled) setDepartments([]) })
@@ -635,7 +640,7 @@ const LeadsPage: React.FC = () => {
         <Typography color="rgba(255,255,255,0.6)">Нет доступных отделов.</Typography>
       ) : (
         <>
-          {departments.length > 1 && (
+          {(user?.role === 'super' || user?.role === 'admin') && departments.length > 1 && (
             <TextField
               select
               label="Отдел"
