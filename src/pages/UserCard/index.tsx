@@ -71,6 +71,7 @@ const UserCardPage: React.FC = () => {
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const [userLeads, setUserLeads] = useState<{ items: import('@/api/users').LeadItemWithMeta[]; total: number; skip: number; limit: number } | null>(null)
   const [userLeadStats, setUserLeadStats] = useState<UserLeadStatsResult | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [leadsPage, setLeadsPage] = useState(0)
   const [leadsRowsPerPage, setLeadsRowsPerPage] = useState(10)
@@ -113,31 +114,39 @@ const UserCardPage: React.FC = () => {
     }
   }, [id, user?.departmentId])
 
+  // Аналитика загружается один раз при открытии карточки — при смене фильтра таблицы не перезапрашиваем.
+  useEffect(() => {
+    if (!id || !user) return
+    let cancelled = false
+    setLoadingStats(true)
+    getUserLeadStats(id, 14)
+      .then((statsData) => {
+        if (!cancelled) setUserLeadStats(statsData)
+      })
+      .catch(() => {
+        if (!cancelled) setUserLeadStats(null)
+      })
+      .finally(() => { if (!cancelled) setLoadingStats(false) })
+    return () => { cancelled = true }
+  }, [id, user])
+
+  // Таблица лидов — перезапрос только при смене страницы или фильтра «Статус».
   useEffect(() => {
     if (!id || !user) return
     let cancelled = false
     setLoadingLeads(true)
-    Promise.all([
-      getUserLeads(id, {
-        skip: leadsPage * leadsRowsPerPage,
-        limit: leadsRowsPerPage,
-        statusId: leadFilterStatusId || undefined,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-      }),
-      getUserLeadStats(id, 14),
-    ])
-      .then(([leadsData, statsData]) => {
-        if (!cancelled) {
-          setUserLeads(leadsData)
-          setUserLeadStats(statsData)
-        }
+    getUserLeads(id, {
+      skip: leadsPage * leadsRowsPerPage,
+      limit: leadsRowsPerPage,
+      statusId: leadFilterStatusId || undefined,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    })
+      .then((leadsData) => {
+        if (!cancelled) setUserLeads(leadsData)
       })
       .catch(() => {
-        if (!cancelled) {
-          setUserLeads(null)
-          setUserLeadStats(null)
-        }
+        if (!cancelled) setUserLeads(null)
       })
       .finally(() => { if (!cancelled) setLoadingLeads(false) })
     return () => { cancelled = true }
@@ -353,7 +362,7 @@ const UserCardPage: React.FC = () => {
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, color: 'rgba(255,255,255,0.9)' }}>
               Аналитика и статистика
             </Typography>
-            {loadingLeads ? (
+            {loadingStats ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 180 }}>
                 <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
               </Box>
@@ -487,13 +496,28 @@ const UserCardPage: React.FC = () => {
             </TextField>
           </Box>
         )}
-        {loadingLeads ? (
+        {!userLeads && loadingLeads ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
           </Box>
-        ) : userLeads && userLeads.items.length > 0 ? (
+        ) : userLeads && (userLeads.items.length > 0 || loadingLeads) ? (
           <>
-            <TableContainer>
+            <TableContainer sx={{ position: 'relative', minHeight: 200 }}>
+              {loadingLeads && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    bgcolor: 'rgba(0,0,0,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1,
+                  }}
+                >
+                  <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
+                </Box>
+              )}
               <Table size="small">
                 <TableHead>
                   <TableRow>
