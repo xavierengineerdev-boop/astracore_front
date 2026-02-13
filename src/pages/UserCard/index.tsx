@@ -45,6 +45,38 @@ import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis
 
 const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6']
 
+/** Тултип графиков с белым текстом на тёмном фоне (круговая диаграмма и линейный график) */
+function ChartTooltipContent({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: Array<{ name?: string; value?: number }>
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  const p = payload[0]
+  const name = p.name ?? label ?? ''
+  const value = p.value ?? 0
+  return (
+    <Box
+      sx={{
+        px: 1.5,
+        py: 1,
+        color: '#fff',
+        fontSize: 12,
+        backgroundColor: 'rgba(18, 22, 36, 0.98)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 8,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+      }}
+    >
+      {name} : {value}
+    </Box>
+  )
+}
+
 const formFieldSx = {
   '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
   '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.6)' },
@@ -425,7 +457,14 @@ const UserCardPage: React.FC = () => {
                               <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                             ))}
                           </Pie>
-                          <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15,18,32,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: 'rgba(255,255,255,0.95)' }} />
+                          <RechartsTooltip
+                            content={<ChartTooltipContent />}
+                            contentStyle={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              padding: 0,
+                            }}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
@@ -454,7 +493,14 @@ const UserCardPage: React.FC = () => {
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                           <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 9 }} />
                           <YAxis tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 9 }} allowDecimals={false} width={24} />
-                          <RechartsTooltip contentStyle={{ backgroundColor: 'rgba(15,18,32,0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: 'rgba(255,255,255,0.95)' }} />
+                          <RechartsTooltip
+                            content={<ChartTooltipContent />}
+                            contentStyle={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              padding: 0,
+                            }}
+                          />
                           <Line type="monotone" dataKey="count" stroke="#a78bfa" strokeWidth={2} dot={{ r: 2 }} />
                         </LineChart>
                       </ResponsiveContainer>
