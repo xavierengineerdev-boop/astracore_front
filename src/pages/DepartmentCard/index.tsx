@@ -40,6 +40,7 @@ import {
   deleteDepartment,
   type DepartmentDetail,
   type DepartmentItem,
+  type UserItemBrief,
 } from '@/api/departments'
 import { getUsers, updateUser, createUser, deleteUser, type UserItem } from '@/api/users'
 import {
@@ -88,7 +89,7 @@ const DepartmentCardPage: React.FC = () => {
   const [createEmployeeSaving, setCreateEmployeeSaving] = useState(false)
   const [addingEmployee, setAddingEmployee] = useState(false)
   const [removingUserId, setRemovingUserId] = useState<string | null>(null)
-  const [deleteEmployeeTarget, setDeleteEmployeeTarget] = useState<UserItem | null>(null)
+  const [deleteEmployeeTarget, setDeleteEmployeeTarget] = useState<UserItemBrief | null>(null)
   const [deletingEmployee, setDeletingEmployee] = useState(false)
   const isEmployeeOwnDept =
     currentUser?.role === 'employee' &&
