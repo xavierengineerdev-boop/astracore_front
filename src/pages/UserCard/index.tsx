@@ -733,9 +733,10 @@ const UserCardPage: React.FC = () => {
                             sx={{ minWidth: 160, ...formFieldSx }}
                             SelectProps={{
                               sx: { color: 'rgba(255,255,255,0.95)', py: 0.5 },
-                              renderValue: (v) => {
-                                if (!v) return 'Не назначен'
-                                return assigneeNameMapForLeads.get(v) ?? v
+                              renderValue: (v: unknown) => {
+                                if (v === undefined || v === null || v === '') return 'Не назначен'
+                                const id = String(v)
+                                return assigneeNameMapForLeads.get(id) ?? id
                               },
                             }}
                           >

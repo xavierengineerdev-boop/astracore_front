@@ -82,7 +82,7 @@ function displayUser(u: UserItemBrief): string {
 export default function TasksPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { showToast } = useToast()
+  const toast = useToast()
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([])
   const [departmentId, setDepartmentId] = useState<string>('')
   const [departmentDetail, setDepartmentDetail] = useState<DepartmentDetail | null>(null)
@@ -138,13 +138,13 @@ export default function TasksPage() {
         const list = await getDepartments()
         if (!cancelled) setDepartments(list)
       } catch (e) {
-        if (!cancelled) showToast(String(e), 'error')
+        if (!cancelled) toast.error(String(e))
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [isSuper, navigate, showToast])
+  }, [isSuper, navigate, toast])
 
   useEffect(() => {
     const id = departmentId?.trim()
@@ -172,7 +172,7 @@ export default function TasksPage() {
           setDepartmentDetail(detail)
         }
       } catch (e) {
-        if (!cancelled) showToast(String(e), 'error')
+        if (!cancelled) toast.error(String(e))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -180,7 +180,7 @@ export default function TasksPage() {
     return () => {
       cancelled = true
     }
-  }, [departmentId, showToast])
+  }, [departmentId, toast])
 
   const tasksByColumn = useMemo(() => {
     const byKey: Record<string, TaskItem[]> = {}
@@ -212,9 +212,9 @@ export default function TasksPage() {
       })
       setTasks((prev) => [...prev, created])
       setCreateOpen(false)
-      showToast('Задача создана', 'success')
+      toast.success('Задача создана')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setCreateSubmitting(false)
     }
@@ -226,9 +226,9 @@ export default function TasksPage() {
     try {
       const updated = await updateTask(task._id, { statusId: newStatusId })
       setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)))
-      showToast('Блок обновлён', 'success')
+      toast.success('Блок обновлён')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     }
   }
 
@@ -258,9 +258,9 @@ export default function TasksPage() {
     try {
       const updated = await updateTask(taskId, { statusId: newStatusId })
       setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)))
-      showToast('Задача перенесена', 'success')
+      toast.success('Задача перенесена')
     } catch (err) {
-      showToast(String(err), 'error')
+      toast.error(String(err))
     }
   }
 
@@ -277,7 +277,7 @@ export default function TasksPage() {
   const handleDropOnCard = async (
     e: React.DragEvent,
     targetColumnId: string,
-    targetTask: TaskItem,
+    _targetTask: TaskItem,
     targetIndex: number,
   ) => {
     e.preventDefault()
@@ -296,7 +296,7 @@ export default function TasksPage() {
         const without = columnTaskIds.filter((id) => id !== draggedTaskId)
         const newOrder = [...without.slice(0, targetIndex), draggedTaskId, ...without.slice(targetIndex)]
         await reorderTasks(departmentId, statusIdForApi, newOrder)
-        showToast('Порядок изменён', 'success')
+        toast.success('Порядок изменён')
       } else {
         await updateTask(draggedTaskId, {
           statusId: targetColumnId === 'none' ? null : targetColumnId,
@@ -307,12 +307,12 @@ export default function TasksPage() {
           ...columnTaskIds.slice(targetIndex),
         ]
         await reorderTasks(departmentId, statusIdForApi, newOrder)
-        showToast('Задача перенесена', 'success')
+        toast.success('Задача перенесена')
       }
       const list = await getTasksByDepartment(departmentId)
       setTasks(list)
     } catch (err) {
-      showToast(String(err), 'error')
+      toast.error(String(err))
     }
   }
 
@@ -333,11 +333,11 @@ export default function TasksPage() {
 
   const handleStatusDialogSubmit = async () => {
     if (!statusFormName.trim()) {
-      showToast('Введите название блока', 'error')
+      toast.error('Введите название блока')
       return
     }
     if (!statusEditId && !departmentId?.trim()) {
-      showToast('Выберите отдел', 'error')
+      toast.error('Выберите отдел')
       return
     }
     setStatusSubmitting(true)
@@ -349,7 +349,7 @@ export default function TasksPage() {
           isCompleted: statusFormIsCompleted,
         })
         setTaskStatuses((prev) => prev.map((s) => (s._id === updated._id ? updated : s)))
-        showToast('Блок обновлён', 'success')
+        toast.success('Блок обновлён')
       } else {
         const created = await createTaskStatus({
           name: statusFormName.trim(),
@@ -358,11 +358,11 @@ export default function TasksPage() {
           departmentId: departmentId!.trim(),
         })
         setTaskStatuses((prev) => [...prev, created].sort((a, b) => a.order - b.order))
-        showToast('Блок добавлен', 'success')
+        toast.success('Блок добавлен')
       }
       setStatusDialogOpen(false)
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setStatusSubmitting(false)
     }
@@ -376,9 +376,9 @@ export default function TasksPage() {
       await deleteTaskStatus(item._id)
       setTaskStatuses((prev) => prev.filter((s) => s._id !== item._id))
       setDeleteStatusConfirm(null)
-      showToast('Блок удалён', 'success')
+      toast.success('Блок удалён')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setDeleteStatusSubmitting(false)
     }
@@ -399,11 +399,11 @@ export default function TasksPage() {
 
   const handlePriorityDialogSubmit = async () => {
     if (!priorityFormName.trim()) {
-      showToast('Введите название приоритета', 'error')
+      toast.error('Введите название приоритета')
       return
     }
     if (!priorityEditId && !departmentId?.trim()) {
-      showToast('Выберите отдел', 'error')
+      toast.error('Выберите отдел')
       return
     }
     setPrioritySubmitting(true)
@@ -414,7 +414,7 @@ export default function TasksPage() {
           color: priorityFormColor,
         })
         setTaskPriorities((prev) => prev.map((p) => (p._id === updated._id ? updated : p)))
-        showToast('Приоритет обновлён', 'success')
+        toast.success('Приоритет обновлён')
       } else {
         const created = await createTaskPriority({
           name: priorityFormName.trim(),
@@ -422,11 +422,11 @@ export default function TasksPage() {
           departmentId: departmentId!.trim(),
         })
         setTaskPriorities((prev) => [...prev, created].sort((a, b) => a.order - b.order))
-        showToast('Приоритет добавлен', 'success')
+        toast.success('Приоритет добавлен')
       }
       setPriorityDialogOpen(false)
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setPrioritySubmitting(false)
     }
@@ -440,9 +440,9 @@ export default function TasksPage() {
       await deleteTaskPriority(item._id)
       setTaskPriorities((prev) => prev.filter((p) => p._id !== item._id))
       setDeletePriorityConfirm(null)
-      showToast('Приоритет удалён', 'success')
+      toast.success('Приоритет удалён')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setDeletePrioritySubmitting(false)
     }
@@ -454,9 +454,9 @@ export default function TasksPage() {
     try {
       const updated = await updateTask(task._id, { priorityId })
       setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)))
-      showToast('Приоритет обновлён', 'success')
+      toast.success('Приоритет обновлён')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     }
   }
 
@@ -483,9 +483,9 @@ export default function TasksPage() {
       })
       setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)))
       setEditPanelTask(updated)
-      showToast('Задача обновлена', 'success')
+      toast.success('Задача обновлена')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setEditSubmitting(false)
     }
@@ -499,9 +499,9 @@ export default function TasksPage() {
       await deleteTask(task._id)
       setTasks((prev) => prev.filter((t) => t._id !== task._id))
       setDeleteConfirmTask(null)
-      showToast('Задача удалена', 'success')
+      toast.success('Задача удалена')
     } catch (e) {
-      showToast(String(e), 'error')
+      toast.error(String(e))
     } finally {
       setDeleteSubmitting(false)
     }
