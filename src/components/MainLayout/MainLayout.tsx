@@ -26,6 +26,7 @@ import PeopleIcon from '@mui/icons-material/People'
 import BusinessIcon from '@mui/icons-material/Business'
 import ContactPageIcon from '@mui/icons-material/ContactPage'
 import BarChartIcon from '@mui/icons-material/BarChart'
+import AssignmentIcon from '@mui/icons-material/Assignment'
 import LogoutIcon from '@mui/icons-material/Logout'
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone'
 import PersonIcon from '@mui/icons-material/Person'
@@ -109,6 +110,20 @@ const MainLayout: React.FC = () => {
   const upcomingRef = useRef(upcomingReminders)
   upcomingRef.current = upcomingReminders
   const audioUnlockedRef = useRef(false)
+  const isFirstLocation = useRef(true)
+
+  // После первого перехода внутри приложения помечаем, что пользователь уже навигировал — кнопка «Назад» будет вести по истории, а не выходить с сайта.
+  useEffect(() => {
+    if (isFirstLocation.current) {
+      isFirstLocation.current = false
+      return
+    }
+    try {
+      sessionStorage.setItem('astracore_has_navigated', '1')
+    } catch {
+      // ignore
+    }
+  }, [location.pathname])
 
   const notifCount = upcomingReminders.length
 
@@ -191,6 +206,9 @@ const MainLayout: React.FC = () => {
       : []),
     ...(user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager'
       ? [{ path: '/statistics', label: 'Статистика', icon: <BarChartIcon /> }]
+      : []),
+    ...(user?.role === 'super'
+      ? [{ path: '/tasks', label: 'Задачник', icon: <AssignmentIcon /> }]
       : []),
   ]
 

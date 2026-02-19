@@ -22,7 +22,7 @@ import {
   TableRow,
   Checkbox,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
@@ -495,13 +495,9 @@ const DepartmentCardPage: React.FC = () => {
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate(isEmployeeOwnDept ? '/' : '/departments')}
-          sx={{ color: 'rgba(196,181,253,0.9)' }}
-        >
+        <BackButton fallbackTo={isEmployeeOwnDept ? '/' : '/departments'}>
           {isEmployeeOwnDept ? 'На главную' : 'К списку отделов'}
-        </Button>
+        </BackButton>
         {canManage && (
           <>
             <Tooltip title="Редактировать">

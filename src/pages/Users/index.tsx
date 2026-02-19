@@ -23,6 +23,7 @@ import {
   Tooltip,
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
+import BackButton from '@/components/BackButton'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import EditIcon from '@mui/icons-material/Edit'
@@ -196,9 +197,12 @@ const UsersPage: React.FC = () => {
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
-          Пользователи
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <BackButton fallbackTo="/" />
+          <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
+            Пользователи
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<PersonAddIcon />}

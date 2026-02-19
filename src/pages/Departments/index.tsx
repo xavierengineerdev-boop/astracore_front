@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
+import BackButton from '@/components/BackButton'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -138,9 +139,12 @@ const DepartmentsPage: React.FC = () => {
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
-          Отделы
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <BackButton fallbackTo="/" />
+          <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
+            Отделы
+          </Typography>
+        </Box>
         {canManage && (
           <Button
             variant="contained"

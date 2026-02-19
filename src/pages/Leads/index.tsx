@@ -35,6 +35,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
@@ -135,6 +136,7 @@ const LeadsPage: React.FC = () => {
   const [bulkParsedItems, setBulkParsedItems] = useState<{ name: string; phone: string; email?: string }[] | null>(null)
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const [bulkResult, setBulkResult] = useState<{ added: number; duplicates: number } | null>(null)
+  const [selectingAllIds, setSelectingAllIds] = useState(false)
   const bulkFileInputRef = React.useRef<HTMLInputElement>(null)
 
   const parsePastedTable = (text: string): { name: string; phone: string; email?: string }[] => {
@@ -156,8 +158,8 @@ const LeadsPage: React.FC = () => {
     user?.role === 'super' ||
     (user?.role === 'manager' && selectedDepartmentId) ||
     (user?.role === 'employee' && (user as { departmentId?: string }).departmentId === selectedDepartmentId)
-  const canBulkEditLeads = user?.role === 'super' || user?.role === 'manager'
-  const canBulkDeleteLeads = user?.role === 'super' || user?.role === 'manager'
+  const canBulkEditLeads = user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager'
+  const canBulkDeleteLeads = user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager'
   const canBulkCreateLeads = user?.role === 'super' || user?.role === 'manager'
   const isEmployee = user?.role === 'employee'
   const editingLead = leadEditId ? leads.find((l) => l._id === leadEditId) ?? null : null
@@ -399,6 +401,49 @@ const LeadsPage: React.FC = () => {
   const toggleSelectLead = (id: string) => {
     setSelectedLeadIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
+
+  const selectAllMatchingFilters = async () => {
+    if (!selectedDepartmentId || leadTotal <= 0) return
+    setSelectingAllIds(true)
+    try {
+      const assignedToParam =
+        leadScope === 'mine' && user?.userId
+          ? user.userId
+          : leadFilterAssignedTo?.trim() || undefined
+      const unassignedOnly = leadScope === 'all' && !assignedToParam
+      const baseParams = {
+        ...(leadFilterName.trim() && { name: leadFilterName.trim() }),
+        ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
+        ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
+        ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+        ...(assignedToParam && { assignedTo: assignedToParam }),
+        ...(unassignedOnly && { unassignedOnly: true }),
+        ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
+        ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
+        sortBy: leadSortBy,
+        sortOrder: leadSortOrder,
+      }
+      const chunkSize = 100
+      let allIds: string[] = []
+      let skip = 0
+      while (skip < leadTotal) {
+        const data = await getLeadsByDepartment(selectedDepartmentId, {
+          skip,
+          limit: chunkSize,
+          ...baseParams,
+        })
+        allIds = allIds.concat(data.items.map((i) => i._id))
+        if (data.items.length < chunkSize) break
+        skip += chunkSize
+      }
+      setSelectedLeadIds(allIds)
+      toast.success(`Выбрано лидов: ${allIds.length}`)
+    } catch {
+      toast.error('Не удалось загрузить список лидов')
+    } finally {
+      setSelectingAllIds(false)
+    }
+  }
   const handleBulkEditApply = async () => {
     if (!someSelected) return
     setBulkEditSaving(true)
@@ -628,9 +673,12 @@ const LeadsPage: React.FC = () => {
         minHeight: 400,
       }}
     >
-      <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600, mb: 2, flexShrink: 0 }}>
-        Лиды
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2, flexShrink: 0 }}>
+        <BackButton fallbackTo="/" />
+        <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
+          Лиды
+        </Typography>
+      </Box>
 
       {loadingDepts ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -836,23 +884,38 @@ const LeadsPage: React.FC = () => {
             </Box>
           </Drawer>
 
-          {(canBulkEditLeads || canBulkDeleteLeads) && someSelected && (
+          {(canBulkEditLeads || canBulkDeleteLeads) && (
             <Paper sx={{ p: 1.5, mb: 1, bgcolor: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 2, flexShrink: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Выбрано: {selectedLeadIds.length}</Typography>
-                {canBulkEditLeads && (
-                  <Button size="small" variant="outlined" onClick={() => setBulkEditOpen(true)} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
-                    Изменить статус / исполнителей
+                {someSelected && (
+                  <>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Выбрано: {selectedLeadIds.length}</Typography>
+                    {canBulkEditLeads && (
+                      <Button size="small" variant="outlined" onClick={() => setBulkEditOpen(true)} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
+                        Изменить статус / исполнителей
+                      </Button>
+                    )}
+                    {canBulkDeleteLeads && (
+                      <Button size="small" variant="outlined" color="error" onClick={() => setBulkDeleteOpen(true)}>
+                        Удалить выбранные
+                      </Button>
+                    )}
+                    <Button size="small" onClick={() => setSelectedLeadIds([])} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                      Снять выделение
+                    </Button>
+                  </>
+                )}
+                {selectedDepartmentId && leadTotal > 0 && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={selectAllMatchingFilters}
+                    disabled={selectingAllIds}
+                    sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}
+                  >
+                    {selectingAllIds ? 'Загрузка…' : `Выбрать все (${leadTotal})`}
                   </Button>
                 )}
-                {canBulkDeleteLeads && (
-                  <Button size="small" variant="outlined" color="error" onClick={() => setBulkDeleteOpen(true)}>
-                    Удалить выбранные
-                  </Button>
-                )}
-                <Button size="small" onClick={() => setSelectedLeadIds([])} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                  Снять выделение
-                </Button>
               </Box>
             </Paper>
           )}

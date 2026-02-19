@@ -27,7 +27,7 @@ import {
   Avatar,
   alpha,
 } from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
@@ -40,8 +40,9 @@ import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
 import { getUser, updateUser, deleteUser, getUserLeads, getUserLeadStats, type UserItem, type UserLeadStatsResult } from '@/api/users'
-import { getDepartments, type DepartmentItem } from '@/api/departments'
+import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
+import { updateLead } from '@/api/leads'
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 
 const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6']
@@ -112,9 +113,36 @@ const UserCardPage: React.FC = () => {
   const [leadsRowsPerPage, setLeadsRowsPerPage] = useState(10)
   const [leadFilterStatusId, setLeadFilterStatusId] = useState('')
   const [statusesForFilter, setStatusesForFilter] = useState<StatusItem[]>([])
+  const [updatingLeadStatusId, setUpdatingLeadStatusId] = useState<string | null>(null)
+  const [updatingLeadAssigneeId, setUpdatingLeadAssigneeId] = useState<string | null>(null)
+  const [departmentDetailForLeads, setDepartmentDetailForLeads] = useState<DepartmentDetail | null>(null)
   const creatableRoles = getCreatableRoles(currentUser?.role ?? '')
   const isOwnProfile = Boolean(id && currentUser?.userId && String(currentUser.userId) === String(id))
   const canAccess = creatableRoles.length > 0 || isOwnProfile
+  const canEditLeadStatusInTable =
+    (isOwnProfile || currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super') &&
+    Boolean(user?.departmentId)
+  const canReassignLeadsInTable =
+    (currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super') &&
+    Boolean(user?.departmentId) &&
+    Boolean(departmentDetailForLeads)
+  const assigneeOptionsForLeads = React.useMemo(() => {
+    if (!departmentDetailForLeads) return []
+    const list: { id: string; label: string }[] = []
+    const label = (u: { firstName?: string; lastName?: string; email: string }) =>
+      [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.email
+    if (departmentDetailForLeads.manager) {
+      list.push({ id: departmentDetailForLeads.manager._id, label: label(departmentDetailForLeads.manager) + ' (рук.)' })
+    }
+    ;(departmentDetailForLeads.employees || []).forEach((e) => {
+      list.push({ id: e._id, label: label(e) })
+    })
+    return list
+  }, [departmentDetailForLeads])
+  const assigneeNameMapForLeads = React.useMemo(
+    () => new Map(assigneeOptionsForLeads.map((o) => [o.id, o.label])),
+    [assigneeOptionsForLeads],
+  )
 
   useEffect(() => {
     if (!canAccess || !id) {
@@ -148,6 +176,16 @@ const UserCardPage: React.FC = () => {
       setStatusesForFilter([])
     }
   }, [id, user?.departmentId])
+
+  useEffect(() => {
+    if (!user?.departmentId) {
+      setDepartmentDetailForLeads(null)
+      return
+    }
+    getDepartment(user.departmentId)
+      .then(setDepartmentDetailForLeads)
+      .catch(() => setDepartmentDetailForLeads(null))
+  }, [user?.departmentId])
 
   // Аналитика загружается один раз при открытии карточки — при смене фильтра таблицы не перезапрашиваем.
   useEffect(() => {
@@ -186,6 +224,45 @@ const UserCardPage: React.FC = () => {
       .finally(() => { if (!cancelled) setLoadingLeads(false) })
     return () => { cancelled = true }
   }, [id, user, leadsPage, leadsRowsPerPage, leadFilterStatusId])
+
+  const refetchUserLeads = () => {
+    if (!id || !user) return
+    getUserLeads(id, {
+      skip: leadsPage * leadsRowsPerPage,
+      limit: leadsRowsPerPage,
+      statusId: leadFilterStatusId || undefined,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    })
+      .then(setUserLeads)
+      .catch(() => setUserLeads(null))
+  }
+
+  const handleLeadStatusChange = async (leadId: string, newStatusId: string) => {
+    setUpdatingLeadStatusId(leadId)
+    try {
+      await updateLead(leadId, { statusId: newStatusId || undefined })
+      toast.success('Статус обновлён')
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось обновить статус')
+    } finally {
+      setUpdatingLeadStatusId(null)
+    }
+  }
+
+  const handleLeadAssigneeChange = async (leadId: string, newAssigneeId: string) => {
+    setUpdatingLeadAssigneeId(leadId)
+    try {
+      await updateLead(leadId, { assignedTo: newAssigneeId ? [newAssigneeId] : [] })
+      toast.success('Лид переназначен')
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось переназначить лид')
+    } finally {
+      setUpdatingLeadAssigneeId(null)
+    }
+  }
 
   if (!canAccess) {
     return (
@@ -303,24 +380,23 @@ const UserCardPage: React.FC = () => {
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => {
-            if (currentUser?.role === 'manager' || currentUser?.role === 'employee') {
-              const deptId = (currentUser as { departmentId?: string }).departmentId
-              navigate(deptId ? `/departments/${deptId}` : '/departments')
-            } else {
-              navigate(creatableRoles.length > 0 ? '/users' : '/')
-            }
-          }}
-          sx={{ color: 'rgba(196,181,253,0.9)' }}
+        <BackButton
+          fallbackTo={
+            currentUser?.role === 'manager' || currentUser?.role === 'employee'
+              ? (currentUser as { departmentId?: string }).departmentId
+                ? `/departments/${(currentUser as { departmentId?: string }).departmentId}`
+                : '/departments'
+              : creatableRoles.length > 0
+                ? '/users'
+                : '/'
+          }
         >
           {currentUser?.role === 'manager' || currentUser?.role === 'employee'
             ? 'К странице отдела'
             : creatableRoles.length > 0
               ? 'К списку пользователей'
               : 'На главную'}
-        </Button>
+        </BackButton>
         {canEditThisUser ? (
           <Tooltip title="Редактировать">
             <IconButton onClick={startEdit} sx={{ color: 'rgba(167,139,250,0.9)' }} size="medium">
@@ -558,7 +634,7 @@ const UserCardPage: React.FC = () => {
       </Typography>
       <Paper sx={{ bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
         {user?.departmentId && statusesForFilter.length > 0 && (
-          <Box sx={{ p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <Box sx={{ p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: '1px solid rgba(255,255,255,0.08)', alignItems: 'center' }}>
             <TextField
               select
               size="small"
@@ -601,10 +677,14 @@ const UserCardPage: React.FC = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Имя</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Контакты</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Телефон</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Email</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Статус</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Исполнитель</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Отдел</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Создан</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Дата последнего комментария</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Источник</TableCell>
                     <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}></TableCell>
                   </TableRow>
                 </TableHead>
@@ -614,12 +694,70 @@ const UserCardPage: React.FC = () => {
                       <TableCell sx={{ color: 'rgba(255,255,255,0.9)' }}>
                         {[lead.name, lead.lastName].filter(Boolean).join(' ').trim() || '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        {lead.phone || lead.email || '—'}
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.phone || '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.email || '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle' }}>
+                        {canEditLeadStatusInTable && statusesForFilter.length > 0 ? (
+                          <TextField
+                            select
+                            size="small"
+                            value={lead.statusId ?? ''}
+                            onChange={(e) => handleLeadStatusChange(lead._id, e.target.value)}
+                            disabled={updatingLeadStatusId === lead._id}
+                            sx={{ minWidth: 140, ...formFieldSx }}
+                            SelectProps={{
+                              sx: { color: 'rgba(255,255,255,0.95)', py: 0.5 },
+                              renderValue: (v) => {
+                                const s = statusesForFilter.find((st) => st._id === v)
+                                return s ? (s.name ?? '—') : (v ? '—' : 'Без статуса')
+                              },
+                            }}
+                          >
+                            <MenuItem value="">Без статуса</MenuItem>
+                            {statusesForFilter.map((s) => (
+                              <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          (lead as import('@/api/users').LeadItemWithMeta).statusName ?? '—'
+                        )}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{(lead as import('@/api/users').LeadItemWithMeta).statusName ?? '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle' }}>
+                        {canReassignLeadsInTable && assigneeOptionsForLeads.length > 0 ? (
+                          <TextField
+                            select
+                            size="small"
+                            value={lead.assignedTo?.[0] ?? ''}
+                            onChange={(e) => handleLeadAssigneeChange(lead._id, e.target.value)}
+                            disabled={updatingLeadAssigneeId === lead._id}
+                            sx={{ minWidth: 160, ...formFieldSx }}
+                            SelectProps={{
+                              sx: { color: 'rgba(255,255,255,0.95)', py: 0.5 },
+                              renderValue: (v) => {
+                                if (!v) return 'Не назначен'
+                                return assigneeNameMapForLeads.get(v) ?? v
+                              },
+                            }}
+                          >
+                            <MenuItem value="">Не назначен</MenuItem>
+                            {assigneeOptionsForLeads.map((o) => (
+                              <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          (lead.assignedTo?.length
+                            ? lead.assignedTo.map((aid) => assigneeNameMapForLeads.get(aid) ?? aid).join(', ')
+                            : '—') || '—'
+                        )}
+                      </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{(lead as import('@/api/users').LeadItemWithMeta).departmentName ?? '—'}</TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('ru-RU') : '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        {(lead as import('@/api/users').LeadItemWithMeta).lastCommentAt
+                          ? new Date((lead as import('@/api/users').LeadItemWithMeta).lastCommentAt!).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          : '—'}
+                      </TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.source ?? '—'}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="Открыть карточку лида">
                           <IconButton

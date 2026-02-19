@@ -18,6 +18,7 @@ import {
   Stack,
 } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
+import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, type DepartmentItem } from '@/api/departments'
@@ -175,9 +176,12 @@ const StatisticsPage: React.FC = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
       <Box sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3, color: 'rgba(255,255,255,0.95)', fontWeight: 600 }}>
-          Статистика по лидам
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+          <BackButton fallbackTo="/" />
+          <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.95)', fontWeight: 600 }}>
+            Статистика по лидам
+          </Typography>
+        </Box>
 
         <Paper sx={{ p: 2, mb: 3, bgcolor: 'rgba(18, 22, 36, 0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>

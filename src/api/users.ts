@@ -78,7 +78,12 @@ export async function deleteUser(id: string): Promise<void> {
   await parseResponse<{ message: string }>(res)
 }
 
-export type LeadItemWithMeta = import('./leads').LeadItem & { statusName?: string; departmentName?: string }
+export type LeadItemWithMeta = import('./leads').LeadItem & {
+  statusName?: string
+  departmentName?: string
+  /** Дата последнего комментария (когда звонили) */
+  lastCommentAt?: string
+}
 export type UserLeadsListResult = {
   items: LeadItemWithMeta[]
   total: number
@@ -102,6 +107,10 @@ export async function getUserLeads(
     email?: string
     statusId?: string
     departmentId?: string
+    /** Фильтр: дата последнего комментария от (когда звонили) — ISO или YYYY-MM-DD */
+    lastCommentDateFrom?: string
+    /** Фильтр: дата последнего комментария до (когда звонили) — ISO или YYYY-MM-DD */
+    lastCommentDateTo?: string
     sortBy?: string
     sortOrder?: 'asc' | 'desc'
   },
@@ -114,6 +123,8 @@ export async function getUserLeads(
   if (params?.email?.trim()) sp.set('email', params.email.trim())
   if (params?.statusId?.trim()) sp.set('statusId', params.statusId.trim())
   if (params?.departmentId?.trim()) sp.set('departmentId', params.departmentId.trim())
+  if (params?.lastCommentDateFrom?.trim()) sp.set('lastCommentDateFrom', params.lastCommentDateFrom.trim())
+  if (params?.lastCommentDateTo?.trim()) sp.set('lastCommentDateTo', params.lastCommentDateTo.trim())
   if (params?.sortBy?.trim()) sp.set('sortBy', params.sortBy.trim())
   if (params?.sortOrder) sp.set('sortOrder', params.sortOrder)
   const q = sp.toString()

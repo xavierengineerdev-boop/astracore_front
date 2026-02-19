@@ -16,6 +16,7 @@ import DepartmentCardPage from './pages/DepartmentCard'
 import LeadsPage from './pages/Leads'
 import LeadCardPage from './pages/LeadCard'
 import StatisticsPage from './pages/Statistics'
+import TasksPage from './pages/Tasks'
 
 function App() {
   const muiTheme = getTheme('dark')
@@ -38,6 +39,7 @@ function App() {
                 <Route path="leads" element={<LeadsPage />} />
                 <Route path="leads/:id" element={<LeadCardPage />} />
                 <Route path="statistics" element={<StatisticsPage />} />
+                <Route path="tasks" element={<TasksPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
