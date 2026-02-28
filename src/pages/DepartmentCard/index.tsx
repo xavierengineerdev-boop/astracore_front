@@ -28,6 +28,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import LabelIcon from '@mui/icons-material/Label'
+import LocalOfferIcon from '@mui/icons-material/LocalOffer'
 import PublicIcon from '@mui/icons-material/Public'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import { useAuth } from '@/auth/AuthProvider'
@@ -57,6 +58,13 @@ import {
   deleteSite,
   type SiteItem,
 } from '@/api/sites'
+import {
+  getLeadTagsByDepartment,
+  createLeadTag,
+  updateLeadTag,
+  deleteLeadTag,
+  type LeadTagItem,
+} from '@/api/leadTags'
 
 const formFieldSx = {
   '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
@@ -108,6 +116,7 @@ const DepartmentCardPage: React.FC = () => {
   const canShowEmployeeActions = canAssignEmployees || isManagerOfThisDept
   const canManageStatuses = currentUser?.role === 'super' || isManagerOfThisDept
   const canManageSites = canManageStatuses
+  const canManageLeadTags = canManageStatuses
 
   const [statuses, setStatuses] = useState<StatusItem[]>([])
   const [statusLoading, setStatusLoading] = useState(false)
@@ -130,6 +139,18 @@ const DepartmentCardPage: React.FC = () => {
   const [siteDeleteId, setSiteDeleteId] = useState<string | null>(null)
   const [siteDeleting, setSiteDeleting] = useState(false)
   const [createdSiteToken, setCreatedSiteToken] = useState<string | null>(null)
+
+  const [leadTags, setLeadTags] = useState<LeadTagItem[]>([])
+  const [leadTagLoading, setLeadTagLoading] = useState(false)
+  const [leadTagFormOpen, setLeadTagFormOpen] = useState(false)
+  const [leadTagEditId, setLeadTagEditId] = useState<string | null>(null)
+  const [leadTagName, setLeadTagName] = useState('')
+  const [leadTagDescription, setLeadTagDescription] = useState('')
+  const [leadTagColor, setLeadTagColor] = useState('#9ca3af')
+  const [leadTagDepartmentId, setLeadTagDepartmentId] = useState('')
+  const [leadTagSaving, setLeadTagSaving] = useState(false)
+  const [leadTagDeleteId, setLeadTagDeleteId] = useState<string | null>(null)
+  const [leadTagDeleting, setLeadTagDeleting] = useState(false)
 
   useEffect(() => {
     if (!canAccess || !id) {
@@ -169,6 +190,17 @@ const DepartmentCardPage: React.FC = () => {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [canAccess, canAssignEmployees, id, currentUser?.role])
+
+  useEffect(() => {
+    if (!id || !canAccess) return
+    let cancelled = false
+    setLeadTagLoading(true)
+    getLeadTagsByDepartment(id)
+      .then((tags) => { if (!cancelled) setLeadTags(tags) })
+      .catch(() => { if (!cancelled) setLeadTags([]) })
+      .finally(() => { if (!cancelled) setLeadTagLoading(false) })
+    return () => { cancelled = true }
+  }, [id, canAccess])
 
   const openEdit = () => {
     if (!department) return
@@ -382,6 +414,83 @@ const DepartmentCardPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setStatusDeleting(false)
+    }
+  }
+
+  const refetchLeadTags = async () => {
+    if (!id) return
+    setLeadTagLoading(true)
+    try {
+      const list = await getLeadTagsByDepartment(id)
+      setLeadTags(list)
+    } catch {
+      setLeadTags([])
+    } finally {
+      setLeadTagLoading(false)
+    }
+  }
+
+  const openLeadTagCreate = () => {
+    setLeadTagEditId(null)
+    setLeadTagName('')
+    setLeadTagDescription('')
+    setLeadTagColor('#9ca3af')
+    setLeadTagDepartmentId(id ?? '')
+    setLeadTagFormOpen(true)
+  }
+
+  const openLeadTagEdit = (t: LeadTagItem) => {
+    setLeadTagEditId(t._id)
+    setLeadTagName(t.name)
+    setLeadTagDescription(t.description ?? '')
+    setLeadTagColor(t.color ?? '#9ca3af')
+    setLeadTagDepartmentId(t.departmentId)
+    setLeadTagFormOpen(true)
+  }
+
+  const handleLeadTagSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!leadTagName.trim()) return
+    setLeadTagSaving(true)
+    try {
+      if (leadTagEditId) {
+        await updateLeadTag(leadTagEditId, {
+          name: leadTagName.trim(),
+          description: leadTagDescription.trim() || undefined,
+          color: leadTagColor.trim(),
+          departmentId: leadTagDepartmentId || undefined,
+        })
+        toast.success('Тег источника обновлён')
+      } else {
+        await createLeadTag({
+          name: leadTagName.trim(),
+          description: leadTagDescription.trim() || undefined,
+          color: leadTagColor.trim(),
+          departmentId: leadTagDepartmentId || id!,
+        })
+        toast.success('Тег источника создан')
+      }
+      await refetchLeadTags()
+      setLeadTagFormOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setLeadTagSaving(false)
+    }
+  }
+
+  const handleLeadTagDelete = async () => {
+    if (!leadTagDeleteId) return
+    setLeadTagDeleting(true)
+    try {
+      await deleteLeadTag(leadTagDeleteId)
+      toast.success('Тег источника удалён')
+      await refetchLeadTags()
+      setLeadTagDeleteId(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setLeadTagDeleting(false)
     }
   }
 
@@ -627,6 +736,29 @@ const DepartmentCardPage: React.FC = () => {
                   }}
                 >
                   {department.sitesCount ?? sites.length ?? 0}
+                </Box>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', mb: 0.5 }}>
+                  Тегов источников
+                </Typography>
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 32,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 2,
+                    bgcolor: 'rgba(167,139,250,0.2)',
+                    color: 'rgba(196,181,253,0.95)',
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                  }}
+                >
+                  {leadTags.length}
                 </Box>
               </Box>
             </Box>
@@ -885,6 +1017,107 @@ const DepartmentCardPage: React.FC = () => {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap', mt: 2 }}>
             <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+              Теги источников лидов
+            </Typography>
+            {canManageLeadTags ? (
+              <Button
+                size="small"
+                startIcon={<LocalOfferIcon />}
+                onClick={openLeadTagCreate}
+                sx={{ color: 'rgba(167,139,250,0.9)' }}
+              >
+                Добавить тег
+              </Button>
+            ) : (
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>
+                Добавлять теги может только руководитель этого отдела или суперпользователь
+              </Typography>
+            )}
+          </Box>
+          <TableContainer
+            component={Paper}
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 2,
+              maxHeight: 280,
+              overflow: 'auto',
+            }}
+          >
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 40, bgcolor: 'rgba(255,255,255,0.04)' }}>Цвет</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Название</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Описание</TableCell>
+                  {canManageLeadTags && (
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)' }} align="right" />
+                  )}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {leadTagLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={canManageLeadTags ? 4 : 3} sx={{ py: 2, textAlign: 'center' }}>
+                      <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
+                    </TableCell>
+                  </TableRow>
+                ) : leadTags.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={canManageLeadTags ? 4 : 3} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
+                      {canManageLeadTags
+                        ? 'Нет тегов. Нажмите «Добавить тег» — теги обозначают источник лида (ВК, импорт, сайт и т.д.).'
+                        : 'Нет тегов источников.'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  leadTags.map((t) => (
+                    <TableRow
+                      key={t._id}
+                      hover
+                      sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}
+                    >
+                      <TableCell sx={{ py: 1 }}>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            bgcolor: t.color || '#9ca3af',
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.95)' }}>
+                        {t.name}
+                      </TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                        {t.description || '—'}
+                      </TableCell>
+                      {canManageLeadTags && (
+                        <TableCell align="right" sx={{ py: 0 }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 0 }}>
+                            <Tooltip title="Редактировать">
+                              <IconButton size="small" onClick={() => openLeadTagEdit(t)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Удалить">
+                              <IconButton size="small" onClick={() => setLeadTagDeleteId(t._id)} sx={{ color: 'rgba(248,113,113,0.8)' }}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap', mt: 2 }}>
+            <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
               Сайты отдела
             </Typography>
             {canManageSites && (
@@ -1115,6 +1348,111 @@ const DepartmentCardPage: React.FC = () => {
             sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
           >
             {statusDeleting ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={leadTagFormOpen}
+        onClose={() => !leadTagSaving && setLeadTagFormOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>
+          {leadTagEditId ? 'Редактировать тег источника' : 'Новый тег источника лида'}
+        </DialogTitle>
+        <Box component="form" onSubmit={handleLeadTagSubmit}>
+          <DialogContent sx={{ pt: 2 }}>
+            <TextField
+              label="Название"
+              value={leadTagName}
+              onChange={(e) => setLeadTagName(e.target.value)}
+              required
+              fullWidth
+              placeholder="Напр. ВКонтакте, импорт, сайт"
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <TextField
+              label="Описание"
+              value={leadTagDescription}
+              onChange={(e) => setLeadTagDescription(e.target.value)}
+              fullWidth
+              multiline
+              rows={2}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                Цвет:
+              </Typography>
+              <input
+                type="color"
+                value={leadTagColor}
+                onChange={(e) => setLeadTagColor(e.target.value)}
+                style={{
+                  width: 40,
+                  height: 32,
+                  padding: 0,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  backgroundColor: 'transparent',
+                }}
+              />
+              <TextField
+                value={leadTagColor}
+                onChange={(e) => setLeadTagColor(e.target.value)}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 100, ...formFieldSx }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setLeadTagFormOpen(false)} disabled={leadTagSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+              Отмена
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={leadTagSaving || !leadTagName.trim()}
+              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
+            >
+              {leadTagSaving ? 'Сохранение…' : leadTagEditId ? 'Сохранить' : 'Создать'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={!!leadTagDeleteId}
+        onClose={() => !leadTagDeleting && setLeadTagDeleteId(null)}
+        PaperProps={{
+          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
+        }}
+      >
+        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить тег источника?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Тег будет удалён. Лиды с этим тегом останутся, но поле источника можно будет изменить.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setLeadTagDeleteId(null)} disabled={leadTagDeleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleLeadTagDelete}
+            disabled={leadTagDeleting}
+            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
+          >
+            {leadTagDeleting ? 'Удаление…' : 'Удалить'}
           </Button>
         </DialogActions>
       </Dialog>

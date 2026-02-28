@@ -38,9 +38,12 @@ export type LeadItem = {
   statusId: string | null
   source: string
   siteId: string | null
+  /** ID тега источника лида (откуда пришёл) */
+  leadTagId?: string | null
   sourceMeta?: LeadSourceMeta
   createdBy: string
   assignedTo: string[]
+  comment?: string
   createdAt: string
   updatedAt: string
 }
@@ -73,8 +76,10 @@ export async function getLeadsByDepartment(
     name?: string
     phone?: string
     email?: string
+    search?: string
     statusId?: string
     assignedTo?: string
+    leadTagId?: string
     unassignedOnly?: boolean
     dateFrom?: string
     dateTo?: string
@@ -86,11 +91,15 @@ export async function getLeadsByDepartment(
   sp.set('departmentId', departmentId)
   if (params?.skip != null) sp.set('skip', String(params.skip))
   if (params?.limit != null) sp.set('limit', String(params.limit))
-  if (params?.name?.trim()) sp.set('name', params.name.trim())
-  if (params?.phone?.trim()) sp.set('phone', params.phone.trim())
-  if (params?.email?.trim()) sp.set('email', params.email.trim())
+  if (params?.search?.trim()) sp.set('search', params.search.trim())
+  else {
+    if (params?.name?.trim()) sp.set('name', params.name.trim())
+    if (params?.phone?.trim()) sp.set('phone', params.phone.trim())
+    if (params?.email?.trim()) sp.set('email', params.email.trim())
+  }
   if (params?.statusId?.trim()) sp.set('statusId', params.statusId.trim())
   if (params?.assignedTo?.trim()) sp.set('assignedTo', params.assignedTo.trim())
+  if (params?.leadTagId?.trim()) sp.set('leadTagId', params.leadTagId.trim())
   if (params?.unassignedOnly === true) sp.set('unassignedOnly', 'true')
   if (params?.dateFrom?.trim()) sp.set('dateFrom', params.dateFrom.trim())
   if (params?.dateTo?.trim()) sp.set('dateTo', params.dateTo.trim())
@@ -118,6 +127,7 @@ export async function createLead(data: {
   source?: string
   siteId?: string
   assignedTo?: string[]
+  leadTagId?: string | null
 }): Promise<LeadItem> {
   const res = await authenticatedFetch(`${API_BASE}/leads`, {
     method: 'POST',
@@ -128,7 +138,7 @@ export async function createLead(data: {
 
 export async function updateLead(
   id: string,
-  data: { name?: string; lastName?: string; phone?: string; phone2?: string; email?: string; email2?: string; statusId?: string; assignedTo?: string[] },
+  data: { name?: string; lastName?: string; phone?: string; phone2?: string; email?: string; email2?: string; statusId?: string; assignedTo?: string[]; comment?: string; leadTagId?: string | null },
 ): Promise<LeadItem> {
   const res = await authenticatedFetch(`${API_BASE}/leads/${id}`, {
     method: 'PATCH',
@@ -359,7 +369,7 @@ export type BulkUpdateLeadsResult = {
 
 export async function bulkUpdateLeads(
   leadIds: string[],
-  dto: { statusId?: string; assignedTo?: string[] },
+  dto: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null },
 ): Promise<BulkUpdateLeadsResult> {
   const res = await authenticatedFetch(`${API_BASE}/leads/bulk`, {
     method: 'PATCH',

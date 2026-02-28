@@ -26,6 +26,7 @@ import {
   Grid,
   Avatar,
   alpha,
+  Checkbox,
 } from '@mui/material'
 import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
@@ -42,7 +43,11 @@ import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
 import { getUser, updateUser, deleteUser, getUserLeads, getUserLeadStats, type UserItem, type UserLeadStatsResult } from '@/api/users'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
-import { updateLead } from '@/api/leads'
+import { updateLead, bulkUpdateLeads } from '@/api/leads'
+import { formFieldSx } from '@/theme/formStyles'
+import LeadCommentPopup from '@/pages/Leads/components/LeadCommentPopup'
+import type { LeadItemWithMeta } from '@/api/users'
+import { getPhoneCountryInfo } from '@/utils/phoneCountry'
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 
 const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6']
@@ -79,11 +84,6 @@ function ChartTooltipContent({
   )
 }
 
-const formFieldSx = {
-  '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.6)' },
-}
-
 const UserCardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -115,6 +115,12 @@ const UserCardPage: React.FC = () => {
   const [statusesForFilter, setStatusesForFilter] = useState<StatusItem[]>([])
   const [updatingLeadStatusId, setUpdatingLeadStatusId] = useState<string | null>(null)
   const [updatingLeadAssigneeId, setUpdatingLeadAssigneeId] = useState<string | null>(null)
+  const [commentPopupLead, setCommentPopupLead] = useState<LeadItemWithMeta | null>(null)
+  const [commentPopupValue, setCommentPopupValue] = useState('')
+  const [commentPopupSaving, setCommentPopupSaving] = useState(false)
+  const [selectedUserCardLeadIds, setSelectedUserCardLeadIds] = useState<string[]>([])
+  const [bulkReassignAssigneeId, setBulkReassignAssigneeId] = useState('')
+  const [bulkReassignSaving, setBulkReassignSaving] = useState(false)
   const [departmentDetailForLeads, setDepartmentDetailForLeads] = useState<DepartmentDetail | null>(null)
   const creatableRoles = getCreatableRoles(currentUser?.role ?? '')
   const isOwnProfile = Boolean(id && currentUser?.userId && String(currentUser.userId) === String(id))
@@ -126,6 +132,7 @@ const UserCardPage: React.FC = () => {
     (currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super') &&
     Boolean(user?.departmentId) &&
     Boolean(departmentDetailForLeads)
+  const canEditLeadCommentInTable = canEditLeadStatusInTable
   const assigneeOptionsForLeads = React.useMemo(() => {
     if (!departmentDetailForLeads) return []
     const list: { id: string; label: string }[] = []
@@ -143,6 +150,23 @@ const UserCardPage: React.FC = () => {
     () => new Map(assigneeOptionsForLeads.map((o) => [o.id, o.label])),
     [assigneeOptionsForLeads],
   )
+  /** Исполнители отдела для переназначения (все кроме текущего сотрудника — карточка которого открыта) */
+  const assigneeOptionsForBulkReassign = React.useMemo(
+    () => (id ? assigneeOptionsForLeads.filter((o) => o.id !== id) : assigneeOptionsForLeads),
+    [assigneeOptionsForLeads, id],
+  )
+  const allSelectedOnUserCardPage =
+    userLeads && userLeads.items.length > 0 && userLeads.items.every((l) => selectedUserCardLeadIds.includes(l._id))
+  const toggleSelectAllUserCardLeads = () => {
+    if (!userLeads) return
+    if (allSelectedOnUserCardPage) setSelectedUserCardLeadIds([])
+    else setSelectedUserCardLeadIds(userLeads.items.map((l) => l._id))
+  }
+  const toggleSelectUserCardLead = (leadId: string) => {
+    setSelectedUserCardLeadIds((prev) =>
+      prev.includes(leadId) ? prev.filter((id) => id !== leadId) : [...prev, leadId],
+    )
+  }
 
   useEffect(() => {
     if (!canAccess || !id) {
@@ -261,6 +285,47 @@ const UserCardPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'Не удалось переназначить лид')
     } finally {
       setUpdatingLeadAssigneeId(null)
+    }
+  }
+
+  const handleBulkReassignSubmit = async () => {
+    if (selectedUserCardLeadIds.length === 0 || !bulkReassignAssigneeId) {
+      toast.error('Выберите лиды и исполнителя для переназначения')
+      return
+    }
+    setBulkReassignSaving(true)
+    try {
+      const result = await bulkUpdateLeads(selectedUserCardLeadIds, {
+        assignedTo: [bulkReassignAssigneeId],
+      })
+      toast.success(`Переназначено лидов: ${result.updated}`)
+      setSelectedUserCardLeadIds([])
+      setBulkReassignAssigneeId('')
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось переназначить лиды')
+    } finally {
+      setBulkReassignSaving(false)
+    }
+  }
+
+  const openCommentPopup = (lead: LeadItemWithMeta) => {
+    setCommentPopupLead(lead)
+    setCommentPopupValue('')
+  }
+
+  const handleCommentPopupSave = async () => {
+    if (!commentPopupLead) return
+    setCommentPopupSaving(true)
+    try {
+      await updateLead(commentPopupLead._id, { comment: commentPopupValue.trim() })
+      toast.success('Комментарий сохранён')
+      refetchUserLeads()
+      setCommentPopupLead(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCommentPopupSaving(false)
     }
   }
 
@@ -631,6 +696,11 @@ const UserCardPage: React.FC = () => {
       {/* Лиды сотрудника — таблица с управлением */}
       <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: 'rgba(255,255,255,0.95)' }}>
         Лиды сотрудника
+        {userLeads && userLeads.total > 0 && (
+          <Typography component="span" variant="body2" sx={{ ml: 1, fontWeight: 400, color: 'rgba(255,255,255,0.5)' }}>
+            ({userLeads.total})
+          </Typography>
+        )}
       </Typography>
       <Paper sx={{ bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
         {user?.departmentId && statusesForFilter.length > 0 && (
@@ -657,6 +727,55 @@ const UserCardPage: React.FC = () => {
           </Box>
         ) : userLeads && (userLeads.items.length > 0 || loadingLeads) ? (
           <>
+            {canReassignLeadsInTable && selectedUserCardLeadIds.length > 0 && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  flexWrap: 'wrap',
+                  p: 2,
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  bgcolor: 'rgba(167,139,250,0.08)',
+                }}
+              >
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                  Выбрано лидов: {selectedUserCardLeadIds.length}
+                </Typography>
+                <TextField
+                  select
+                  size="small"
+                  label="Переназначить на"
+                  value={bulkReassignAssigneeId}
+                  onChange={(e) => setBulkReassignAssigneeId(e.target.value)}
+                  disabled={bulkReassignSaving || assigneeOptionsForBulkReassign.length === 0}
+                  sx={{ minWidth: 220, ...formFieldSx }}
+                  SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                >
+                  <MenuItem value="">— Выберите исполнителя</MenuItem>
+                  {assigneeOptionsForBulkReassign.map((o) => (
+                    <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={bulkReassignSaving || !bulkReassignAssigneeId}
+                  onClick={handleBulkReassignSubmit}
+                  sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
+                >
+                  {bulkReassignSaving ? 'Переназначение…' : 'Переназначить'}
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => { setSelectedUserCardLeadIds([]); setBulkReassignAssigneeId('') }}
+                  disabled={bulkReassignSaving}
+                  sx={{ color: 'rgba(255,255,255,0.7)' }}
+                >
+                  Снять выделение
+                </Button>
+              </Box>
+            )}
             <TableContainer sx={{ position: 'relative', minHeight: 200 }}>
               {loadingLeads && (
                 <Box
@@ -676,25 +795,53 @@ const UserCardPage: React.FC = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    {canReassignLeadsInTable && (
+                      <TableCell padding="checkbox" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+                        <Checkbox
+                          indeterminate={selectedUserCardLeadIds.length > 0 && !allSelectedOnUserCardPage}
+                          checked={allSelectedOnUserCardPage}
+                          onChange={toggleSelectAllUserCardLeads}
+                          sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Имя</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Телефон</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Email</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Статус</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Исполнитель</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Отдел</TableCell>
+                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Комментарий</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Создан</TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Дата последнего комментария</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Источник</TableCell>
                     <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {userLeads.items.map((lead) => (
                     <TableRow key={lead._id} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
+                      {canReassignLeadsInTable && (
+                        <TableCell padding="checkbox" sx={{ verticalAlign: 'middle' }}>
+                          <Checkbox
+                            checked={selectedUserCardLeadIds.includes(lead._id)}
+                            onChange={() => toggleSelectUserCardLead(lead._id)}
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell sx={{ color: 'rgba(255,255,255,0.9)' }}>
                         {[lead.name, lead.lastName].filter(Boolean).join(' ').trim() || '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.phone || '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <span>{(lead.phone || lead.phone2 || '').trim() || '—'}</span>
+                          {(() => {
+                            const ph = (lead.phone || lead.phone2 || '').trim()
+                            const info = ph ? getPhoneCountryInfo(ph) : null
+                            return info ? <span>{info.flag}</span> : null
+                          })()}
+                        </Box>
+                      </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.email || '—'}</TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle' }}>
                         {canEditLeadStatusInTable && statusesForFilter.length > 0 ? (
@@ -751,14 +898,46 @@ const UserCardPage: React.FC = () => {
                             : '—') || '—'
                         )}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{(lead as import('@/api/users').LeadItemWithMeta).departmentName ?? '—'}</TableCell>
+                      <TableCell
+                        sx={{
+                          color: lead.comment ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                          maxWidth: 180,
+                          cursor: canEditLeadCommentInTable ? 'pointer' : 'default',
+                          '&:hover': canEditLeadCommentInTable ? { textDecoration: 'underline', bgcolor: 'rgba(255,255,255,0.04)' } : {},
+                        }}
+                        onClick={(e) => {
+                          if (canEditLeadCommentInTable) {
+                            e.stopPropagation()
+                            openCommentPopup(lead)
+                          }
+                        }}
+                      >
+                        {lead.comment?.trim() ? (
+                          lead.comment.length > 40 ? (
+                            <Tooltip
+                              title={
+                                <Typography component="span" sx={{ whiteSpace: 'pre-wrap', display: 'block', maxWidth: 320 }}>
+                                  {lead.comment}
+                                </Typography>
+                              }
+                              placement="top-start"
+                              enterDelay={300}
+                            >
+                              <span>{lead.comment.slice(0, 40)}…</span>
+                            </Tooltip>
+                          ) : (
+                            lead.comment
+                          )
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('ru-RU') : '—'}</TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
                         {(lead as import('@/api/users').LeadItemWithMeta).lastCommentAt
                           ? new Date((lead as import('@/api/users').LeadItemWithMeta).lastCommentAt!).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                           : '—'}
                       </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.source ?? '—'}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="Открыть карточку лида">
                           <IconButton
@@ -783,7 +962,17 @@ const UserCardPage: React.FC = () => {
               rowsPerPage={leadsRowsPerPage}
               onRowsPerPageChange={(e) => { setLeadsRowsPerPage(parseInt(e.target.value, 10)); setLeadsPage(0) }}
               rowsPerPageOptions={[5, 10, 25]}
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count !== -1 ? count : `более ${to}`}`}
               sx={{ color: 'rgba(255,255,255,0.8)', borderTop: '1px solid rgba(255,255,255,0.08)' }}
+            />
+            <LeadCommentPopup
+              open={!!commentPopupLead}
+              onClose={() => !commentPopupSaving && setCommentPopupLead(null)}
+              leadName={commentPopupLead ? [commentPopupLead.name, commentPopupLead.lastName].filter(Boolean).join(' ').trim() || undefined : undefined}
+              comment={commentPopupValue}
+              onCommentChange={setCommentPopupValue}
+              onSave={handleCommentPopupSave}
+              saving={commentPopupSaving}
             />
           </>
         ) : (

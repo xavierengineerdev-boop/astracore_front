@@ -1,28 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Typography,
-  Paper,
-  Button,
-  TextField,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Tooltip,
-  CircularProgress,
-  Checkbox,
-} from '@mui/material'
+import { Box, Typography, IconButton, Tooltip, CircularProgress } from '@mui/material'
 import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
-import NoteAddIcon from '@mui/icons-material/NoteAdd'
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
-import TaskAltIcon from '@mui/icons-material/TaskAlt'
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import {
@@ -55,44 +36,24 @@ import {
 } from '@/api/leads'
 import { getDepartment, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
 import type { Dayjs } from 'dayjs'
-import 'dayjs/locale/ru'
-
-const formFieldSx = {
-  '& .MuiOutlinedInput-root': { minHeight: 48 },
-  '& .MuiOutlinedInput-input': { paddingTop: '16px', paddingBottom: '16px', boxSizing: 'border-box' },
-  '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.6)' },
-}
-
-function formatDateTime(iso: string | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-}
-
-const HISTORY_ACTION_LABELS: Record<string, string> = {
-  created: 'Лид создан',
-  updated: 'Данные изменены',
-  status_changed: 'Статус изменён',
-  assigned: 'Назначение изменено',
-  note_added: 'Добавлена заметка',
-  note_edited: 'Заметка отредактирована',
-  note_deleted: 'Заметка удалена',
-  comment_added: 'Добавлен комментарий',
-  comment_edited: 'Комментарий отредактирован',
-  comment_deleted: 'Комментарий удалён',
-  task_added: 'Добавлена задача',
-  task_updated: 'Задача изменена',
-  task_deleted: 'Задача удалена',
-  reminder_added: 'Добавлено напоминание',
-  reminder_done: 'Напоминание выполнено',
-  reminder_deleted: 'Напоминание удалено',
-}
+import {
+  LeadInfoCard,
+  CommentsSection,
+  NotesSection,
+  ActivityByDayCard,
+  TimeInStatusesCard,
+  TasksCard,
+  RemindersCard,
+  LeadHistorySection,
+  SourceMetaBlock,
+  LeadEditDialog,
+  LeadDeleteDialog,
+  NoteEditDialog,
+  NoteDeleteDialog,
+  CommentEditDialog,
+  CommentDeleteDialog,
+} from './components'
 
 const LeadCardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -573,9 +534,7 @@ const LeadCardPage: React.FC = () => {
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-        <BackButton fallbackTo={backFallbackUrl}>
-          К списку лидов
-        </BackButton>
+        <BackButton fallbackTo={backFallbackUrl}>К списку лидов</BackButton>
         {canEditLead && (
           <>
             <Tooltip title="Редактировать">
@@ -596,1144 +555,150 @@ const LeadCardPage: React.FC = () => {
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: 'stretch' }}>
-        <Paper
-          sx={{
-            p: 3,
-            flex: { md: 1 },
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-        <Box sx={{ display: 'grid', gap: 2, flex: 1, minHeight: 0 }}>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Имя</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.95)' }}>{lead.name}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Фамилия</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.95)' }}>{lead.lastName || '—'}</Typography>
-          </Box>
-          <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
-            <Box
-              sx={lead.phone ? { cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } } : {}}
-              onClick={() => {
-                if (lead.phone?.trim()) {
-                  navigator.clipboard.writeText(lead.phone.trim())
-                  toast.success('Телефон скопирован')
-                }
-              }}
-            >
-              <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон</Typography>
-              <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.phone || '—'}</Typography>
-            </Box>
-          </Tooltip>
-          <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
-            <Box
-              sx={lead.email ? { cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } } : {}}
-              onClick={() => {
-                if (lead.email?.trim()) {
-                  navigator.clipboard.writeText(lead.email.trim())
-                  toast.success('Email скопирован')
-                }
-              }}
-            >
-              <Typography variant="caption" color="rgba(255,255,255,0.5)">Email</Typography>
-              <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email || '—'}</Typography>
-            </Box>
-          </Tooltip>
-          {(lead.phone2 ?? '').trim() ? (
-            <Tooltip title="Нажмите, чтобы скопировать">
-              <Box
-                sx={{ cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } }}
-                onClick={() => { navigator.clipboard.writeText((lead.phone2 ?? '').trim()); toast.success('Телефон 2 скопирован') }}
-              >
-                <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон 2</Typography>
-                <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.phone2?.trim()}</Typography>
-              </Box>
-            </Tooltip>
-          ) : null}
-          {(lead.email2 ?? '').trim() ? (
-            <Tooltip title="Нажмите, чтобы скопировать">
-              <Box
-                sx={{ cursor: 'pointer', '&:hover .copyable': { color: 'rgba(167,139,250,0.95)' } }}
-                onClick={() => { navigator.clipboard.writeText((lead.email2 ?? '').trim()); toast.success('Email 2 скопирован') }}
-              >
-                <Typography variant="caption" color="rgba(255,255,255,0.5)">Email 2</Typography>
-                <Typography variant="body1" className="copyable" sx={{ color: 'rgba(255,255,255,0.9)' }}>{lead.email2?.trim()}</Typography>
-              </Box>
-            </Tooltip>
-          ) : null}
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Статус</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-              {statusItem ? (
-                <>
-                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: statusItem.color || '#9ca3af', flexShrink: 0 }} />
-                  <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{statusItem.name}</Typography>
-                </>
-              ) : (
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)' }}>—</Typography>
-              )}
-            </Box>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Обрабатывает</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{assignedNames}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Отдел</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{department?.name ?? '—'}</Typography>
-          </Box>
-          {lead.source ? (
-            <Box>
-              <Typography variant="caption" color="rgba(255,255,255,0.5)">Источник</Typography>
-              <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.source}</Typography>
-            </Box>
-          ) : null}
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Создан</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>{formatDateTime(lead.createdAt)}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="caption" color="rgba(255,255,255,0.5)">Обновлён</Typography>
-            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>{formatDateTime(lead.updatedAt)}</Typography>
-          </Box>
-        </Box>
-        </Paper>
-
-        {/* Комментарии — второй столбец (та же логика, что и заметки; отображаются в истории) */}
-        <Paper
-          sx={{
-            p: 3,
-            flex: { md: 1 },
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif', flexShrink: 0 }}>
-            Комментарии
-          </Typography>
-          <Box component="form" onSubmit={handleAddComment} sx={{ mb: 2, flexShrink: 0 }}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={2}
-              placeholder="Добавить комментарий..."
-              value={commentContent}
-              onChange={(e) => setCommentContent(e.target.value)}
-              disabled={commentSubmitting}
-              sx={{
-                ...formFieldSx,
-                '& .MuiOutlinedInput-root': { minHeight: 72 },
-              }}
-            />
-            <Button
-              type="submit"
-              size="small"
-              startIcon={<ChatBubbleOutlineIcon />}
-              disabled={commentSubmitting || !commentContent.trim()}
-              sx={{ mt: 1, color: 'rgba(167,139,250,0.95)' }}
-            >
-              {commentSubmitting ? 'Добавление…' : 'Добавить комментарий'}
-            </Button>
-          </Box>
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {loadingComments ? (
-            <Box sx={{ py: 2, display: 'flex', justifyContent: 'center' }}>
-              <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-            </Box>
-          ) : comments.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет комментариев</Typography>
-          ) : (
-            <Box
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-                pr: 0.5,
-                ...(comments.length > 4 && { maxHeight: 320 }),
-              }}
-            >
-              {comments.map((comment) => (
-                <Box
-                  key={comment._id}
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 1,
-                    bgcolor: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: 'rgba(255,255,255,0.9)',
-                          overflow: 'hidden',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {comment.content}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>
-                        {assigneeNameMap[comment.authorId] || comment.authorId} · {formatDateTime(comment.createdAt)}
-                      </Typography>
-                    </Box>
-                    {canEditOrDeleteComment(comment) && (
-                      <Box sx={{ display: 'flex', gap: 0, flexShrink: 0 }}>
-                        <IconButton size="small" onClick={() => openCommentEdit(comment)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" onClick={() => setCommentDeleteId(comment._id)} sx={{ color: 'rgba(248,113,113,0.9)' }}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    )}
-                  </Box>
-                </Box>
-              ))}
-            </Box>
-          )}
-          </Box>
-        </Paper>
-
-        {/* Заметки — третий столбец */}
-        <Paper
-          sx={{
-            p: 3,
-            flex: { md: 1 },
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif', flexShrink: 0 }}>
-          Заметки
-        </Typography>
-        <Box component="form" onSubmit={handleAddNote} sx={{ mb: 2, flexShrink: 0 }}>
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            placeholder="Добавить заметку..."
-            value={noteContent}
-            onChange={(e) => setNoteContent(e.target.value)}
-            disabled={noteSubmitting}
-            sx={{
-              ...formFieldSx,
-              '& .MuiOutlinedInput-root': { minHeight: 72 },
-            }}
-          />
-          <Button
-            type="submit"
-            size="small"
-            startIcon={<NoteAddIcon />}
-            disabled={noteSubmitting || !noteContent.trim()}
-            sx={{ mt: 1, color: 'rgba(167,139,250,0.95)' }}
-          >
-            {noteSubmitting ? 'Добавление…' : 'Добавить заметку'}
-          </Button>
-        </Box>
-        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {loadingNotes ? (
-          <Box sx={{ py: 2, display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-          </Box>
-        ) : notes.length === 0 ? (
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет заметок</Typography>
-        ) : (
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1.5,
-              pr: 0.5,
-              ...(notes.length > 4 && { maxHeight: 320 }),
-            }}
-          >
-            {notes.map((note) => (
-              <Box
-                key={note._id}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  flexShrink: 0,
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: 'rgba(255,255,255,0.9)',
-                        overflow: 'hidden',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {note.content}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5, display: 'block' }}>
-                      {assigneeNameMap[note.authorId] || note.authorId} · {formatDateTime(note.createdAt)}
-                    </Typography>
-                  </Box>
-                  {canEditOrDeleteNote(note) && (
-                    <Box sx={{ display: 'flex', gap: 0, flexShrink: 0 }}>
-                      <IconButton size="small" onClick={() => openNoteEdit(note)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => setNoteDeleteId(note._id)} sx={{ color: 'rgba(248,113,113,0.9)' }}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  )}
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        )}
-        </Box>
-        </Paper>
+        <LeadInfoCard
+          lead={lead}
+          departmentName={department?.name ?? null}
+          statusItem={statusItem}
+          assignedNames={assignedNames}
+          onCopyPhone={() => toast.success('Телефон скопирован')}
+          onCopyEmail={() => toast.success('Email скопирован')}
+          onCopyPhone2={() => toast.success('Телефон 2 скопирован')}
+          onCopyEmail2={() => toast.success('Email 2 скопирован')}
+        />
+        <CommentsSection
+          comments={comments}
+          loading={loadingComments}
+          content={commentContent}
+          onContentChange={setCommentContent}
+          onSubmit={handleAddComment}
+          submitting={commentSubmitting}
+          assigneeNameMap={assigneeNameMap}
+          canEditOrDelete={canEditOrDeleteComment}
+          onEdit={openCommentEdit}
+          onDelete={setCommentDeleteId}
+        />
+        <NotesSection
+          notes={notes}
+          loading={loadingNotes}
+          content={noteContent}
+          onContentChange={setNoteContent}
+          onSubmit={handleAddNote}
+          submitting={noteSubmitting}
+          assigneeNameMap={assigneeNameMap}
+          canEditOrDelete={canEditOrDeleteNote}
+          onEdit={openNoteEdit}
+          onDelete={setNoteDeleteId}
+        />
       </Box>
 
-      {/* Блоки перед историей: активность, время в статусах, задачи, напоминания — компактная высота как у заметок */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mt: 3, alignItems: 'stretch' }}>
-        <Paper
-          sx={{
-            p: 2.5,
-            flex: '1 1 280px',
-            minWidth: 0,
-            maxWidth: { md: 400 },
-            maxHeight: 360,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
-            Активность по дням
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          {activityByDay.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет данных</Typography>
-          ) : (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-end',
-                gap: 0.75,
-                height: 100,
-                px: 0.5,
-                py: 1,
-                borderRadius: 1.5,
-                bgcolor: 'rgba(0,0,0,0.15)',
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
-              {activityByDay.map(([day, count]) => {
-                const maxCount = Math.max(...activityByDay.map(([, c]) => c), 1)
-                const h = Math.max(12, (count / maxCount) * 100)
-                return (
-                  <Tooltip key={day} title={`${day}: ${count} ${count === 1 ? 'событие' : 'события'}`}>
-                    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
-                      <Box
-                        sx={{
-                          width: '100%',
-                          maxWidth: 28,
-                          height: `${h}%`,
-                          minHeight: 8,
-                          borderRadius: '6px 6px 0 0',
-                          background: 'linear-gradient(180deg, rgba(167,139,250,0.95) 0%, rgba(139,92,246,0.75) 100%)',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                          transition: 'height 0.2s ease',
-                        }}
-                      />
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem' }}>
-                        {day}
-                      </Typography>
-                    </Box>
-                  </Tooltip>
-                )
-              })}
-            </Box>
-          )}
-          </Box>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: 2.5,
-            flex: '1 1 280px',
-            minWidth: 0,
-            maxWidth: { md: 400 },
-            maxHeight: 360,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
-            Время в статусах
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          {timeInStatuses.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет данных</Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-              {timeInStatuses.map(({ statusId, days }) => {
-                const status = statusId ? statuses.find((s) => s._id === statusId) : null
-                const totalDays = timeInStatuses.reduce((s, t) => s + t.days, 0)
-                const pct = totalDays > 0 ? (days / totalDays) * 100 : 0
-                const barColor = status?.color || '#a78bfa'
-                return (
-                  <Box key={statusId ?? 'null'}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem' }}>
-                        {status?.name ?? (statusId ? '—' : 'Без статуса')}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
-                        {days} дн.
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        height: 10,
-                        borderRadius: '10px',
-                        bgcolor: 'rgba(255,255,255,0.08)',
-                        overflow: 'hidden',
-                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.15)',
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: `${pct}%`,
-                          height: '100%',
-                          borderRadius: '10px',
-                          bgcolor: barColor,
-                          boxShadow: '0 0 10px rgba(0,0,0,0.2)',
-                          transition: 'width 0.3s ease',
-                        }}
-                      />
-                    </Box>
-                  </Box>
-                )
-              })}
-            </Box>
-          )}
-          </Box>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: 2.5,
-            flex: '1 1 280px',
-            minWidth: 0,
-            maxWidth: { md: 400 },
-            maxHeight: 360,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
-            Задачи
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <Box component="form" onSubmit={handleAddTask} sx={{ mb: 1.5 }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Название задачи"
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              disabled={taskSubmitting}
-              sx={{ mb: 1, ...formFieldSx }}
-            />
-            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
-              <DateTimePicker
-                label="Дедлайн"
-                value={taskDueAt}
-                onChange={(v) => setTaskDueAt(v)}
-                disabled={taskSubmitting}
-                slotProps={{
-                  textField: {
-                    size: 'small',
-                    fullWidth: true,
-                    sx: { mb: 1, ...formFieldSx },
-                  },
-                }}
-              />
-            </LocalizationProvider>
-            <Button
-              type="submit"
-              size="small"
-              startIcon={<TaskAltIcon />}
-              disabled={taskSubmitting || !taskTitle.trim()}
-              sx={{ color: 'rgba(167,139,250,0.95)' }}
-            >
-              {taskSubmitting ? 'Добавление…' : 'Добавить задачу'}
-            </Button>
-          </Box>
-          {loadingTasks ? (
-            <Box sx={{ py: 1, display: 'flex', justifyContent: 'center' }}>
-              <CircularProgress size={20} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-            </Box>
-          ) : tasks.length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет задач</Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {tasks.map((task) => (
-                <Box
-                  key={task._id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    py: 0.5,
-                    px: 1,
-                    borderRadius: 1,
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                  }}
-                >
-                  <Checkbox
-                    size="small"
-                    checked={task.completed}
-                    onChange={() => handleToggleTask(task)}
-                    sx={{ color: 'rgba(167,139,250,0.7)', p: 0.25, '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                  />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: task.completed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.9)',
-                        textDecoration: task.completed ? 'line-through' : 'none',
-                      }}
-                    >
-                      {task.title}
-                    </Typography>
-                    {task.dueAt && (
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>
-                        {formatDateTime(task.dueAt)}
-                      </Typography>
-                    )}
-                  </Box>
-                  <IconButton size="small" onClick={() => handleDeleteTask(task._id)} sx={{ color: 'rgba(248,113,113,0.8)' }}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          )}
-          </Box>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: 2.5,
-            flex: '1 1 280px',
-            minWidth: 0,
-            maxWidth: { md: 400 },
-            maxHeight: 360,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
-            Напоминания
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <Box component="form" onSubmit={handleAddReminder} sx={{ mb: 1.5 }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Например: перезвонить"
-              value={reminderTitle}
-              onChange={(e) => setReminderTitle(e.target.value)}
-              disabled={reminderSubmitting}
-              sx={{ mb: 1, ...formFieldSx }}
-            />
-            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
-              <DateTimePicker
-                label="Дата и время"
-                value={reminderRemindAt}
-                onChange={(v) => setReminderRemindAt(v)}
-                disabled={reminderSubmitting}
-                slotProps={{
-                  textField: {
-                    size: 'small',
-                    fullWidth: true,
-                    sx: { mb: 1, ...formFieldSx },
-                  },
-                }}
-              />
-            </LocalizationProvider>
-            <Button
-              type="submit"
-              size="small"
-              startIcon={<NotificationsActiveIcon />}
-              disabled={reminderSubmitting || !reminderTitle.trim() || !reminderRemindAt}
-              sx={{ color: 'rgba(167,139,250,0.95)' }}
-            >
-              {reminderSubmitting ? 'Добавление…' : 'Добавить напоминание'}
-            </Button>
-          </Box>
-          {loadingReminders ? (
-            <Box sx={{ py: 1, display: 'flex', justifyContent: 'center' }}>
-              <CircularProgress size={20} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-            </Box>
-          ) : reminders.filter((r) => !r.done).length === 0 ? (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет активных напоминаний</Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {reminders
-                .filter((r) => !r.done)
-                .map((reminder) => (
-                  <Box
-                    key={reminder._id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      py: 0.5,
-                      px: 1,
-                      borderRadius: 1,
-                      bgcolor: 'rgba(255,255,255,0.05)',
-                    }}
-                  >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                        {reminder.title}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                        {formatDateTime(reminder.remindAt)}
-                      </Typography>
-                    </Box>
-                    <Tooltip title="Отметить выполненным">
-                      <IconButton size="small" onClick={() => handleReminderDone(reminder)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
-                        <TaskAltIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <IconButton size="small" onClick={() => handleDeleteReminder(reminder._id)} sx={{ color: 'rgba(248,113,113,0.8)' }}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))}
-            </Box>
-          )}
-          </Box>
-        </Paper>
+        <ActivityByDayCard activityByDay={activityByDay} />
+        <TimeInStatusesCard timeInStatuses={timeInStatuses} statuses={statuses} />
+        <TasksCard
+          tasks={tasks}
+          loading={loadingTasks}
+          title={taskTitle}
+          onTitleChange={setTaskTitle}
+          dueAt={taskDueAt}
+          onDueAtChange={setTaskDueAt}
+          onSubmit={handleAddTask}
+          submitting={taskSubmitting}
+          onToggle={handleToggleTask}
+          onDelete={handleDeleteTask}
+        />
+        <RemindersCard
+          reminders={reminders}
+          loading={loadingReminders}
+          title={reminderTitle}
+          onTitleChange={setReminderTitle}
+          remindAt={reminderRemindAt}
+          onRemindAtChange={setReminderRemindAt}
+          onSubmit={handleAddReminder}
+          submitting={reminderSubmitting}
+          onDone={handleReminderDone}
+          onDelete={handleDeleteReminder}
+        />
       </Box>
 
-      {/* История лида — на всю ширину под карточкой и заметками */}
-      <Paper
-        sx={{
-          p: 3,
-          mt: 3,
-          width: '100%',
-          boxSizing: 'border-box',
-          bgcolor: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 2,
-        }}
-      >
-        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif' }}>
-          История лида
-        </Typography>
-        {loadingHistory ? (
-          <Box sx={{ py: 2, display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-          </Box>
-        ) : (() => {
-          if (displayHistory.length === 0) {
-            return <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет записей</Typography>
-          }
-          const historyScrollable = displayHistory.length > 5
-          return (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-                ...(historyScrollable && { maxHeight: 420, overflowY: 'auto', pr: 0.5 }),
-              }}
-            >
-              {displayHistory.map((entry) => {
-                const statusName = (sid: string | null) => (sid ? statuses.find((s) => s._id === sid)?.name ?? sid : '—')
-                let detail = ''
-                if (entry.action === 'status_changed' && entry.meta) {
-                  const m = entry.meta as { oldStatusId?: string; newStatusId?: string }
-                  detail = `${statusName(m.oldStatusId ?? null)} → ${statusName(m.newStatusId ?? null)}`
-                }
-                if (entry.action === 'assigned' && entry.meta) {
-                  const m = entry.meta as { oldAssignedTo?: string[]; newAssignedTo?: string[] }
-                  const oldNames = (m.oldAssignedTo ?? []).map((id) => assigneeNameMap[id] || id).join(', ') || '—'
-                  const newNames = (m.newAssignedTo ?? []).map((id) => assigneeNameMap[id] || id).join(', ') || '—'
-                  detail = `${oldNames} → ${newNames}`
-                }
-                if (entry.action === 'created' && entry.meta) {
-                  const m = entry.meta as { name?: string }
-                  if (m.name) detail = m.name
-                }
-                if (entry.action === 'updated' && entry.meta) {
-                  const m = entry.meta as Record<string, unknown>
-                  const parts = Object.entries(m)
-                    .filter(([, v]) => v != null && v !== '')
-                    .map(([k, v]) => {
-                      const labels: Record<string, string> = { name: 'Имя', lastName: 'Фамилия', phone: 'Телефон', email: 'Email' }
-                      return `${labels[k] ?? k}: ${String(v)}`
-                    })
-                  if (parts.length) detail = parts.join(' · ')
-                }
-                if ((entry.action === 'note_added' || entry.action === 'note_edited') && entry.meta) {
-                  const m = entry.meta as { content?: string }
-                  if (m.content) detail = m.content
-                }
-                if ((entry.action === 'comment_added' || entry.action === 'comment_edited') && entry.meta) {
-                  const m = entry.meta as { content?: string }
-                  if (m.content) detail = m.content
-                }
-                if ((entry.action === 'task_added' || entry.action === 'task_updated' || entry.action === 'task_deleted') && entry.meta) {
-                  const m = entry.meta as { title?: string; dueAt?: string | null; completed?: boolean }
-                  const parts: string[] = []
-                  if (m.title) parts.push(m.title)
-                  if (m.dueAt) parts.push(`до ${formatDateTime(m.dueAt)}`)
-                  if (entry.action === 'task_updated' && m.completed !== undefined) parts.push(m.completed ? 'выполнена' : 'в работе')
-                  if (parts.length) detail = parts.join(' · ')
-                }
-                if ((entry.action === 'reminder_added' || entry.action === 'reminder_done' || entry.action === 'reminder_deleted') && entry.meta) {
-                  const m = entry.meta as { title?: string; remindAt?: string }
-                  const parts: string[] = []
-                  if (m.title) parts.push(m.title)
-                  if (m.remindAt) parts.push(formatDateTime(m.remindAt))
-                  if (parts.length) detail = parts.join(' · ')
-                }
-                return (
-                  <Box
-                    key={entry._id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 2,
-                      py: 1.5,
-                      px: 2,
-                      borderRadius: 1.5,
-                      bgcolor: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }}
-                  >
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'rgba(167,139,250,0.9)', flexShrink: 0, mt: 0.75 }} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.95)', fontWeight: 500 }}>
-                        {HISTORY_ACTION_LABELS[entry.action] ?? entry.action}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', display: 'block', mt: 0.25 }}>
-                        {(entry as LeadHistoryItem).userDisplayName || assigneeNameMap[entry.userId] || entry.userId} · {formatDateTime(entry.createdAt)}
-                      </Typography>
-                      {detail && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: 'rgba(255,255,255,0.65)',
-                            display: 'block',
-                            mt: 0.5,
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {detail}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                )
-              })}
-            </Box>
-          )
-        })()}
-      </Paper>
+      <LeadHistorySection
+        displayHistory={displayHistory}
+        loading={loadingHistory}
+        statuses={statuses}
+        assigneeNameMap={assigneeNameMap}
+      />
 
-      {/* Дополнительная информация (с сайта) — перенесена вниз */}
-      {lead && (
-        <Paper
-          sx={{
-            p: 3,
-            mt: 3,
-            maxWidth: 720,
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif' }}>
-            Дополнительная информация
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            {(() => {
-              const sm = lead.sourceMeta
-              const rows: { label: string; value: string | undefined }[] = [
-                { label: 'IP', value: sm?.ip },
-                { label: 'User-Agent', value: sm?.userAgent },
-                { label: 'Referrer', value: sm?.referrer },
-                { label: 'Экран', value: sm?.screen },
-                { label: 'Язык', value: sm?.language },
-                { label: 'Платформа', value: sm?.platform },
-                { label: 'Часовой пояс', value: sm?.timezone },
-                { label: 'Память (GB)', value: sm?.deviceMemory },
-                { label: 'Ядра CPU', value: sm?.hardwareConcurrency },
-              ]
-              if (sm?.extra && typeof sm.extra === 'object') {
-                Object.entries(sm.extra).forEach(([k, v]) => {
-                  rows.push({ label: k, value: v != null ? String(v) : undefined })
-                })
-              }
-              return rows.map((r, idx) => (
-                <Box key={`${r.label}-${idx}`}>
-                  <Typography variant="caption" color="rgba(255,255,255,0.5)">{r.label}</Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: r.value ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
-                      wordBreak: 'break-word',
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {r.value?.trim() || '—'}
-                  </Typography>
-                </Box>
-              ))
-            })()}
-          </Box>
-        </Paper>
-      )}
+      <SourceMetaBlock lead={lead} />
 
-      <Dialog
+      <LeadEditDialog
         open={editing}
         onClose={() => !saving && setEditing(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Редактировать лид</DialogTitle>
-        <Box component="form" onSubmit={handleSave}>
-          <DialogContent sx={{ pt: 2 }}>
-            <TextField
-              required
-              fullWidth
-              label="Имя"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              fullWidth
-              label="Фамилия"
-              value={editLastName}
-              onChange={(e) => setEditLastName(e.target.value)}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              fullWidth
-              label="Телефон"
-              value={editPhone}
-              onChange={(e) => setEditPhone(e.target.value)}
-              disabled={isEmployee && !!lead?.phone?.trim()}
-              helperText={isEmployee && lead?.phone?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              fullWidth
-              label="Email"
-              type="email"
-              value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              fullWidth
-              label="Телефон 2"
-              value={editPhone2}
-              onChange={(e) => setEditPhone2(e.target.value)}
-              disabled={isEmployee && !!lead?.phone2?.trim()}
-              helperText={isEmployee && lead?.phone2?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              fullWidth
-              label="Email 2"
-              type="email"
-              value={editEmail2}
-              onChange={(e) => setEditEmail2(e.target.value)}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              select
-              fullWidth
-              label="Статус"
-              value={editStatusId}
-              onChange={(e) => setEditStatusId(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            >
-              <MenuItem value="">— Не выбран</MenuItem>
-              {statuses.map((s) => (
-                <MenuItem key={s._id} value={s._id}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: s.color || '#9ca3af', flexShrink: 0 }} />
-                    {s.name}
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
-            {assigneeOptions.length > 0 && (
-              isEmployee ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>Обрабатывает</Typography>
-                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mt: 0.5 }}>
-                    {editAssignedTo?.length ? editAssignedTo.map((id) => assigneeNameMap[id] || id).join(', ') : '— Никого'}
-                  </Typography>
-                </Box>
-              ) : (
-                <TextField
-                  select
-                  SelectProps={{
-                    multiple: true,
-                    sx: { color: 'rgba(255,255,255,0.95)' },
-                    renderValue: (selected: unknown) =>
-                      (selected as string[]).length
-                        ? (selected as string[]).map((id) => assigneeNameMap[id] || id).join(', ')
-                        : '— Никого',
-                  }}
-                  label="Обрабатывает"
-                  value={editAssignedTo}
-                  onChange={(e) => setEditAssignedTo(Array.isArray(e.target.value) ? e.target.value : [])}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  sx={{ mb: 2, ...formFieldSx }}
-                >
-                  {assigneeOptions.map((o) => (
-                    <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
-                  ))}
-                </TextField>
-              )
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setEditing(false)} disabled={saving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Отмена
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={saving}
-              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-            >
-              {saving ? 'Сохранение…' : 'Сохранить'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onSubmit={handleSave}
+        saving={saving}
+        name={editName}
+        onNameChange={setEditName}
+        lastName={editLastName}
+        onLastNameChange={setEditLastName}
+        phone={editPhone}
+        onPhoneChange={setEditPhone}
+        phone2={editPhone2}
+        onPhone2Change={setEditPhone2}
+        email={editEmail}
+        onEmailChange={setEditEmail}
+        email2={editEmail2}
+        onEmail2Change={setEditEmail2}
+        statusId={editStatusId}
+        onStatusIdChange={setEditStatusId}
+        assignedTo={editAssignedTo}
+        onAssignedToChange={setEditAssignedTo}
+        statuses={statuses}
+        assigneeOptions={assigneeOptions}
+        assigneeNameMap={assigneeNameMap}
+        isEmployee={isEmployee}
+        phoneDisabled={isEmployee && !!lead?.phone?.trim()}
+        phone2Disabled={isEmployee && !!lead?.phone2?.trim()}
+        phoneHelperText={isEmployee && lead?.phone?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
+        phone2HelperText={isEmployee && lead?.phone2?.trim() ? 'Только руководитель может изменить' : isEmployee ? 'Можно добавить, если пусто' : undefined}
+      />
 
-      <Dialog
+      <LeadDeleteDialog
         open={deleteConfirmOpen}
         onClose={() => !deleting && setDeleteConfirmOpen(false)}
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить лид?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            {lead.name} — действие нельзя отменить.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleDeleteConfirm}
-            disabled={deleting}
-            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
-          >
-            {deleting ? 'Удаление…' : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteConfirm}
+        deleting={deleting}
+        leadName={lead.name}
+      />
 
-      <Dialog
+      <NoteEditDialog
         open={Boolean(noteEditId)}
         onClose={() => !noteEditSaving && setNoteEditId(null)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Редактировать заметку</DialogTitle>
-        <Box component="form" onSubmit={handleSaveNoteEdit}>
-          <DialogContent sx={{ pt: 2 }}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              label="Текст"
-              value={noteEditContent}
-              onChange={(e) => setNoteEditContent(e.target.value)}
-              required
-              sx={formFieldSx}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setNoteEditId(null)} disabled={noteEditSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Отмена
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={noteEditSaving || !noteEditContent.trim()}
-              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-            >
-              {noteEditSaving ? 'Сохранение…' : 'Сохранить'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onSubmit={handleSaveNoteEdit}
+        content={noteEditContent}
+        onContentChange={setNoteEditContent}
+        saving={noteEditSaving}
+      />
 
-      <Dialog
+      <NoteDeleteDialog
         open={Boolean(noteDeleteId)}
         onClose={() => !noteDeleting && setNoteDeleteId(null)}
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить заметку?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>Действие нельзя отменить.</Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setNoteDeleteId(null)} disabled={noteDeleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleDeleteNoteConfirm}
-            disabled={noteDeleting}
-            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
-          >
-            {noteDeleting ? 'Удаление…' : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteNoteConfirm}
+        deleting={noteDeleting}
+      />
 
-      <Dialog
+      <CommentEditDialog
         open={Boolean(commentEditId)}
         onClose={() => !commentEditSaving && setCommentEditId(null)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Редактировать комментарий</DialogTitle>
-        <Box component="form" onSubmit={handleSaveCommentEdit}>
-          <DialogContent sx={{ pt: 2 }}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              label="Текст"
-              value={commentEditContent}
-              onChange={(e) => setCommentEditContent(e.target.value)}
-              required
-              sx={formFieldSx}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setCommentEditId(null)} disabled={commentEditSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Отмена
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={commentEditSaving || !commentEditContent.trim()}
-              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-            >
-              {commentEditSaving ? 'Сохранение…' : 'Сохранить'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onSubmit={handleSaveCommentEdit}
+        content={commentEditContent}
+        onContentChange={setCommentEditContent}
+        saving={commentEditSaving}
+      />
 
-      <Dialog
+      <CommentDeleteDialog
         open={Boolean(commentDeleteId)}
         onClose={() => !commentDeleting && setCommentDeleteId(null)}
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить комментарий?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>Действие нельзя отменить.</Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setCommentDeleteId(null)} disabled={commentDeleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleDeleteCommentConfirm}
-            disabled={commentDeleting}
-            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
-          >
-            {commentDeleting ? 'Удаление…' : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleDeleteCommentConfirm}
+        deleting={commentDeleting}
+      />
     </Box>
   )
 }

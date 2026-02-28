@@ -1,83 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import {
-  Box,
-  Typography,
-  Paper,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  CircularProgress,
-  Button,
-  Stack,
-} from '@mui/material'
-import DownloadIcon from '@mui/icons-material/Download'
+import { Box, Typography, CircularProgress } from '@mui/material'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, type DepartmentItem } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
 import { getLeadStats, type LeadStatsResult } from '@/api/leads'
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import dayjs, { type Dayjs } from 'dayjs'
-import * as XLSX from 'xlsx'
-import 'dayjs/locale/ru'
-
-dayjs.locale('ru')
-
-const formFieldSx = {
-  '& .MuiOutlinedInput-root': { minHeight: 44 },
-  '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.6)' },
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(a.href)
-}
-
-function assigneeLabel(name: string, isManager: boolean): string {
-  return isManager ? `${name} (Руководитель)` : `${name} (Сотрудник)`
-}
-
-function exportStatsToCsv(stats: LeadStatsResult): void {
-  const statusNames = stats.statuses.map((s) => s.name)
-  const header = ['Ответственный', ...statusNames, 'Всего']
-  const rows = stats.rows.map((r) => [
-    assigneeLabel(r.assigneeName, r.isManager),
-    ...r.byStatus.map((b) => String(b.count)),
-    String(r.total),
-  ])
-  const lines = [header.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','), ...rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))]
-  const csv = '\uFEFF' + lines.join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  downloadBlob(blob, `stats-${stats.departmentName.replace(/[^\w\s-]/g, '')}-${dayjs().format('YYYY-MM-DD')}.csv`)
-}
-
-function exportStatsToXlsx(stats: LeadStatsResult): void {
-  const statusNames = stats.statuses.map((s) => s.name)
-  const header = ['Ответственный', ...statusNames, 'Всего']
-  const rows = stats.rows.map((r) => [
-    assigneeLabel(r.assigneeName, r.isManager),
-    ...r.byStatus.map((b) => b.count),
-    r.total,
-  ])
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Статистика')
-  XLSX.writeFile(wb, `stats-${stats.departmentName.replace(/[^\w\s-]/g, '')}-${dayjs().format('YYYY-MM-DD')}.xlsx`)
-}
+import type { Dayjs } from 'dayjs'
+import { exportStatsToCsv, exportStatsToXlsx } from './constants'
+import { StatisticsFilters, StatisticsExportBar, StatisticsTable } from './components'
 
 const StatisticsPage: React.FC = () => {
   const { user } = useAuth()
@@ -174,123 +105,50 @@ const StatisticsPage: React.FC = () => {
   }
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 3 }}>
-          <BackButton fallbackTo="/" />
-          <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.95)', fontWeight: 600 }}>
-            Статистика по лидам
-          </Typography>
-        </Box>
-
-        <Paper sx={{ p: 2, mb: 3, bgcolor: 'rgba(18, 22, 36, 0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
-            <FormControl size="small" sx={{ minWidth: 220, ...formFieldSx }}>
-              <InputLabel>Отдел</InputLabel>
-              <Select
-                value={selectedDepartmentId}
-                onChange={(e) => setSelectedDepartmentId(e.target.value)}
-                label="Отдел"
-                disabled={loadingDepts}
-              >
-                {departments.map((d) => (
-                  <MenuItem key={d._id} value={d._id}>{d.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Box sx={{ minWidth: 160 }}>
-              <DatePicker
-                label="Дата от"
-                value={dateFrom}
-                onChange={(v) => setDateFrom(v)}
-                slotProps={{ textField: { size: 'small', sx: formFieldSx } }}
-              />
-            </Box>
-            <Box sx={{ minWidth: 160 }}>
-              <DatePicker
-                label="Дата до"
-                value={dateTo}
-                onChange={(v) => setDateTo(v)}
-                slotProps={{ textField: { size: 'small', sx: formFieldSx } }}
-              />
-            </Box>
-            <FormControl size="small" sx={{ minWidth: 200, ...formFieldSx }}>
-              <InputLabel>Статус</InputLabel>
-              <Select
-                value={filterStatusId}
-                onChange={(e) => setFilterStatusId(e.target.value)}
-                label="Статус"
-              >
-                <MenuItem value="">Все статусы</MenuItem>
-                {statuses.map((s) => (
-                  <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        </Paper>
-
-        {loadingStats && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
-          </Box>
-        )}
-
-        {!loadingStats && stats && (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                {stats.departmentName}
-                {stats.filters && (stats.filters.dateFrom || stats.filters.dateTo || stats.filters.statusId) && (
-                  <Typography component="span" variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', ml: 1 }}>
-                    (с фильтрами)
-                  </Typography>
-                )}
-              </Typography>
-              {canExport && (
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleExportStats('csv')} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
-                    Статистика CSV
-                  </Button>
-                  <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={() => handleExportStats('xlsx')} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
-                    Статистика XLSX
-                  </Button>
-                </Stack>
-              )}
-            </Box>
-
-            <TableContainer component={Paper} sx={{ bgcolor: 'rgba(18, 22, 36, 0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Ответственный</TableCell>
-                    {stats.statuses.map((s) => (
-                      <TableCell key={s._id} align="right" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{s.name}</TableCell>
-                    ))}
-                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Всего</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {stats.rows.map((r) => (
-                    <TableRow key={r.assigneeId}>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.9)' }}>{assigneeLabel(r.assigneeName, r.isManager)}</TableCell>
-                      {r.byStatus.map((b) => (
-                        <TableCell key={b.statusId} align="right" sx={{ color: 'rgba(255,255,255,0.9)' }}>{b.count}</TableCell>
-                      ))}
-                      <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.95)', fontWeight: 500 }}>{r.total}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
-        )}
-
-        {!loadingStats && !stats && selectedDepartmentId && (
-          <Typography color="rgba(255,255,255,0.5)">Нет данных по выбранному отделу.</Typography>
-        )}
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+        <BackButton fallbackTo="/" />
+        <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.95)', fontWeight: 600 }}>
+          Статистика по лидам
+        </Typography>
       </Box>
-    </LocalizationProvider>
+
+      <StatisticsFilters
+        departments={departments}
+        selectedDepartmentId={selectedDepartmentId}
+        onDepartmentChange={setSelectedDepartmentId}
+        loadingDepts={loadingDepts}
+        dateFrom={dateFrom}
+        onDateFromChange={setDateFrom}
+        dateTo={dateTo}
+        onDateToChange={setDateTo}
+        statuses={statuses}
+        filterStatusId={filterStatusId}
+        onFilterStatusIdChange={setFilterStatusId}
+      />
+
+      {loadingStats && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
+        </Box>
+      )}
+
+      {!loadingStats && stats && (
+        <>
+          <StatisticsExportBar
+            stats={stats}
+            canExport={canExport}
+            onExportCsv={() => handleExportStats('csv')}
+            onExportXlsx={() => handleExportStats('xlsx')}
+          />
+          <StatisticsTable stats={stats} />
+        </>
+      )}
+
+      {!loadingStats && !stats && selectedDepartmentId && (
+        <Typography color="rgba(255,255,255,0.5)">Нет данных по выбранному отделу.</Typography>
+      )}
+    </Box>
   )
 }
 

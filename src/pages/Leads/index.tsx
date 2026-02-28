@@ -1,45 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Typography,
-  Paper,
-  Button,
-  TextField,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Drawer,
-  IconButton,
-  Tooltip,
-  Checkbox,
-} from '@mui/material'
+import { Box, Typography, TextField, MenuItem, Button, CircularProgress, InputAdornment } from '@mui/material'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import UploadIcon from '@mui/icons-material/Upload'
-import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
-import CloseIcon from '@mui/icons-material/Close'
 import FilterListIcon from '@mui/icons-material/FilterList'
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import SearchIcon from '@mui/icons-material/Search'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
+import { getLeadTagsByDepartment, type LeadTagItem } from '@/api/leadTags'
 import {
   getLeadsByDepartment,
   createLead,
@@ -51,39 +22,46 @@ import {
   type LeadItem,
 } from '@/api/leads'
 import * as XLSX from 'xlsx'
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { DatePicker } from '@mui/x-date-pickers/DatePicker'
-import dayjs, { type Dayjs } from 'dayjs'
-import 'dayjs/locale/ru'
+import { formFieldSxTall as formFieldSx } from '@/theme/formStyles'
+import {
+  LeadsFiltersDrawer,
+  LeadsBulkBar,
+  LeadsTable,
+  LeadFormDialog,
+  LeadDeleteDialog,
+  LeadCommentPopup,
+  BulkEditDialog,
+  BulkDeleteDialog,
+  BulkImportDialog,
+} from './components'
 
-const formFieldSx = {
-  '& .MuiOutlinedInput-root': { minHeight: 48 },
-  '& .MuiOutlinedInput-input': {
-    paddingTop: '16px',
-    paddingBottom: '16px',
-    boxSizing: 'border-box',
-  },
-  '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.6)' },
+const ROWS_PER_PAGE_OPTIONS_ARR = [10, 25, 50, 100, 500, 1000]
+
+/** Обновить query в URL, сохраняя остальные параметры (для своей вкладки и перезагрузки) */
+function mergeSearchParams(
+  prev: URLSearchParams,
+  updates: Record<string, string | number | undefined>,
+): URLSearchParams {
+  const p = new URLSearchParams(prev)
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value === undefined || value === '' || (key === 'page' && Number(value) === 0) || (key === 'limit' && Number(value) === 25)) {
+      p.delete(key)
+    } else {
+      p.set(key, String(value))
+    }
+  })
+  return p
 }
-
-function formatDateTime(iso: string | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-}
-
-const ROWS_PER_PAGE_OPTIONS = [10, 25, 50]
 
 const LeadsPage: React.FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
-  // Сотрудник видит только свои лиды; руководитель, админ, супер — могут выбирать «Все» / «Мои»
-  const scopeFromUrl = searchParams.get('scope') === 'mine' ? 'mine' : 'all'
+  // Сотрудник видит только свои лиды; руководитель, админ, супер — «Неназначенные» / «Все лиды отдела» / «Мои»
+  const scopeParam = searchParams.get('scope')
+  const scopeFromUrl: 'all' | 'department' | 'mine' =
+    scopeParam === 'mine' ? 'mine' : scopeParam === 'department' ? 'department' : 'all'
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('')
   const [loadingDepts, setLoadingDepts] = useState(true)
@@ -91,27 +69,44 @@ const LeadsPage: React.FC = () => {
   const [leads, setLeads] = useState<LeadItem[]>([])
   const [leadLoading, setLeadLoading] = useState(false)
   const [leadTotal, setLeadTotal] = useState(0)
-  const [leadPage, setLeadPage] = useState(0)
-  const [leadRowsPerPage, setLeadRowsPerPage] = useState(25)
-  const [leadFilterName, setLeadFilterName] = useState('')
-  const [leadFilterPhone, setLeadFilterPhone] = useState('')
-  const [leadFilterEmail, setLeadFilterEmail] = useState('')
-  const [leadFilterStatusId, setLeadFilterStatusId] = useState('')
-  const [leadFilterAssignedTo, setLeadFilterAssignedTo] = useState('')
-  const [leadFilterDateFrom, setLeadFilterDateFrom] = useState('')
-  const [leadFilterDateTo, setLeadFilterDateTo] = useState('')
-  const [leadScope, setLeadScope] = useState<'all' | 'mine'>(scopeFromUrl)
 
-  useEffect(() => {
-    setLeadScope(user?.role === 'employee' ? 'mine' : scopeFromUrl)
-  }, [scopeFromUrl, user?.role])
+  // Состояние фильтров и пагинации из URL — каждая вкладка и перезагрузка сохраняют свой набор
+  const leadPage = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10) || 0)
+  const leadRowsPerPageRaw = parseInt(searchParams.get('limit') ?? '25', 10) || 25
+  const leadRowsPerPage = ROWS_PER_PAGE_OPTIONS_ARR.includes(leadRowsPerPageRaw) ? leadRowsPerPageRaw : 25
+  const leadFilterName = searchParams.get('search') ?? ''
+  const leadFilterPhone = searchParams.get('phone') ?? ''
+  const leadFilterEmail = searchParams.get('email') ?? ''
+  const leadFilterStatusId = searchParams.get('statusId') ?? ''
+  const leadFilterLeadTagId = searchParams.get('leadTagId') ?? ''
+  const leadFilterAssignedTo = searchParams.get('assignedTo') ?? ''
+  const leadFilterDateFrom = searchParams.get('dateFrom') ?? ''
+  const leadFilterDateTo = searchParams.get('dateTo') ?? ''
+  const leadSortBy = (searchParams.get('sortBy') ?? 'createdAt').trim() || 'createdAt'
+  const leadSortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc'
+  const leadScope = user?.role === 'employee' ? 'mine' : scopeFromUrl
 
-  const [leadSortBy, setLeadSortBy] = useState('createdAt')
-  const [leadSortOrder, setLeadSortOrder] = useState<'asc' | 'desc'>('desc')
+  const setLeadPage = (page: number) => setSearchParams((prev) => mergeSearchParams(prev, { page: page <= 0 ? undefined : page }))
+  const setLeadRowsPerPage = (limit: number) => setSearchParams((prev) => mergeSearchParams(prev, { limit: limit === 25 ? undefined : limit, page: 0 }))
+  const setLeadFilterName = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { search: v.trim() || undefined, page: 0 }))
+  const setLeadFilterPhone = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { phone: v.trim() || undefined, page: 0 }))
+  const setLeadFilterEmail = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { email: v.trim() || undefined, page: 0 }))
+  const setLeadFilterStatusId = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { statusId: v.trim() || undefined, page: 0 }))
+  const setLeadFilterLeadTagId = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { leadTagId: v.trim() || undefined, page: 0 }))
+  const setLeadFilterAssignedTo = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { assignedTo: v.trim() || undefined, page: 0 }))
+  const setLeadFilterDateFrom = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { dateFrom: v.trim() || undefined, page: 0 }))
+  const setLeadFilterDateTo = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { dateTo: v.trim() || undefined, page: 0 }))
+  const setLeadSortBy = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { sortBy: v === 'createdAt' ? undefined : v, page: 0 }))
+  const setLeadSortOrder = (v: 'asc' | 'desc') => setSearchParams((prev) => mergeSearchParams(prev, { sortOrder: v === 'desc' ? undefined : v, page: 0 }))
+  const setLeadScope = (scope: 'all' | 'department' | 'mine') => {
+    if (user?.role === 'employee') return
+    setSearchParams((prev) => mergeSearchParams(prev, { scope: scope === 'all' ? undefined : scope, page: 0 }))
+  }
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkEditStatusId, setBulkEditStatusId] = useState('')
+  const [bulkEditLeadTagId, setBulkEditLeadTagId] = useState('')
   const [bulkEditChangeAssignees, setBulkEditChangeAssignees] = useState(false)
   const [bulkEditAssignedTo, setBulkEditAssignedTo] = useState<string[]>([])
   const [bulkEditSaving, setBulkEditSaving] = useState(false)
@@ -126,11 +121,16 @@ const LeadsPage: React.FC = () => {
   const [leadEmail, setLeadEmail] = useState('')
   const [leadEmail2, setLeadEmail2] = useState('')
   const [leadStatusId, setLeadStatusId] = useState('')
+  const [leadTagId, setLeadTagId] = useState('')
   const [leadAssignedTo, setLeadAssignedTo] = useState<string[]>([])
   const [leadSaving, setLeadSaving] = useState(false)
   const [departmentDetail, setDepartmentDetail] = useState<DepartmentDetail | null>(null)
+  const [departmentLeadTags, setDepartmentLeadTags] = useState<LeadTagItem[]>([])
   const [leadDeleteId, setLeadDeleteId] = useState<string | null>(null)
   const [leadDeleting, setLeadDeleting] = useState(false)
+  const [commentPopupLead, setCommentPopupLead] = useState<LeadItem | null>(null)
+  const [commentPopupValue, setCommentPopupValue] = useState('')
+  const [commentPopupSaving, setCommentPopupSaving] = useState(false)
   const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null)
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   const [bulkParsedItems, setBulkParsedItems] = useState<{ name: string; phone: string; email?: string }[] | null>(null)
@@ -185,6 +185,12 @@ const LeadsPage: React.FC = () => {
     return m
   }, [assigneeOptions])
 
+  const leadTagMap = useMemo(() => {
+    const m: Record<string, { name: string; color: string }> = {}
+    departmentLeadTags.forEach((t) => { m[t._id] = { name: t.name, color: t.color || '#9ca3af' } })
+    return m
+  }, [departmentLeadTags])
+
   const bulkEditAssignedToSafe = useMemo(() => {
     const arr = Array.isArray(bulkEditAssignedTo) ? bulkEditAssignedTo : []
     return arr
@@ -199,6 +205,7 @@ const LeadsPage: React.FC = () => {
           if (!cancelled) {
             setDepartments([{ _id: d._id, name: d.name, managerId: d.managerId, createdAt: d.createdAt, updatedAt: d.updatedAt }])
             setSelectedDepartmentId(d._id)
+            if (!searchParams.get('departmentId')) setSearchParams((prev) => mergeSearchParams(prev, { departmentId: d._id }))
           }
         })
         .catch(() => { if (!cancelled) setDepartments([]) })
@@ -213,7 +220,11 @@ const LeadsPage: React.FC = () => {
                 ? list.filter((d) => String(d._id) === String(managerDeptId))
                 : list
             setDepartments(filtered)
-            if (filtered.length > 0 && !selectedDepartmentId) setSelectedDepartmentId(filtered[0]._id)
+            if (filtered.length > 0 && !selectedDepartmentId) {
+              const firstId = filtered[0]._id
+              setSelectedDepartmentId(firstId)
+              if (!searchParams.get('departmentId')) setSearchParams((prev) => mergeSearchParams(prev, { departmentId: firstId }))
+            }
           }
         })
         .catch(() => { if (!cancelled) setDepartments([]) })
@@ -223,6 +234,18 @@ const LeadsPage: React.FC = () => {
     }
     return () => { cancelled = true }
   }, [user?.role, (user as { departmentId?: string })?.departmentId])
+
+  useEffect(() => {
+    if (!selectedDepartmentId) {
+      setDepartmentLeadTags([])
+      return
+    }
+    let cancelled = false
+    getLeadTagsByDepartment(selectedDepartmentId)
+      .then((tags) => { if (!cancelled) setDepartmentLeadTags(tags) })
+      .catch(() => { if (!cancelled) setDepartmentLeadTags([]) })
+    return () => { cancelled = true }
+  }, [selectedDepartmentId])
 
   useEffect(() => {
     const deptIdFromUrl = searchParams.get('departmentId')
@@ -249,8 +272,9 @@ const LeadsPage: React.FC = () => {
     const pageToUse = deptChanged ? 0 : leadPage
     let cancelled = false
     setLeadLoading(true)
-    // «Все лиды» — только неназначенные (никому не переданы); при выборе фильтра «Обрабатывает» — лиды этого исполнителя.
-    // «Мои лиды» — только лиды, назначенные на текущего пользователя.
+    // «Неназначенные» — только лиды без исполнителя; при фильтре «Обрабатывает» — лиды этого исполнителя.
+    // «Все лиды отдела» — все лиды отдела (руководитель/админ/супер).
+    // «Мои лиды» — лиды, назначенные на текущего пользователя.
     const assignedToParam =
       leadScope === 'mine' && user?.userId
         ? user.userId
@@ -259,10 +283,11 @@ const LeadsPage: React.FC = () => {
     const filterParams = {
       skip: pageToUse * leadRowsPerPage,
       limit: leadRowsPerPage,
-      ...(leadFilterName.trim() && { name: leadFilterName.trim() }),
-      ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
-      ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
+      ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
+      ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
+      ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
       ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+      ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
       ...(assignedToParam && { assignedTo: assignedToParam }),
       ...(unassignedOnly && { unassignedOnly: true }),
       ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
@@ -301,6 +326,7 @@ const LeadsPage: React.FC = () => {
     leadFilterPhone,
     leadFilterEmail,
     leadFilterStatusId,
+    leadFilterLeadTagId,
     leadFilterAssignedTo,
     leadScope,
     user?.userId,
@@ -322,10 +348,11 @@ const LeadsPage: React.FC = () => {
       const data = await getLeadsByDepartment(selectedDepartmentId, {
         skip: leadPage * leadRowsPerPage,
         limit: leadRowsPerPage,
-        ...(leadFilterName.trim() && { name: leadFilterName.trim() }),
-        ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
-        ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
+        ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
+        ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
+        ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
         ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+        ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
         ...(assignedToParam && { assignedTo: assignedToParam }),
         ...(unassignedOnly && { unassignedOnly: true }),
         ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
@@ -344,16 +371,11 @@ const LeadsPage: React.FC = () => {
   }
 
   const resetLeadFilters = () => {
-    setLeadFilterName('')
-    setLeadFilterPhone('')
-    setLeadFilterEmail('')
-    setLeadFilterStatusId('')
-    setLeadFilterAssignedTo('')
-    setLeadFilterDateFrom('')
-    setLeadFilterDateTo('')
-    setLeadSortBy('createdAt')
-    setLeadSortOrder('desc')
-    setLeadPage(0)
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev)
+      ;['search', 'phone', 'email', 'statusId', 'leadTagId', 'assignedTo', 'dateFrom', 'dateTo', 'sortBy', 'sortOrder', 'page'].forEach((k) => p.delete(k))
+      return p
+    })
   }
 
   const handleLeadStatusChange = async (leadId: string, statusId: string) => {
@@ -364,6 +386,21 @@ const LeadsPage: React.FC = () => {
         prev.map((l) => (l._id === leadId ? { ...l, statusId: statusId || null } : l)),
       )
       toast.success('Статус обновлён')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleLeadTagChange = async (leadId: string, leadTagId: string | null) => {
+    setUpdatingLeadId(leadId)
+    try {
+      await updateLead(leadId, { leadTagId })
+      setLeads((prev) =>
+        prev.map((l) => (l._id === leadId ? { ...l, leadTagId: leadTagId ?? undefined } : l)),
+      )
+      toast.success('Источник обновлён')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -412,10 +449,11 @@ const LeadsPage: React.FC = () => {
           : leadFilterAssignedTo?.trim() || undefined
       const unassignedOnly = leadScope === 'all' && !assignedToParam
       const baseParams = {
-        ...(leadFilterName.trim() && { name: leadFilterName.trim() }),
-        ...(leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
-        ...(leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
+        ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
+        ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
+        ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
         ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+        ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
         ...(assignedToParam && { assignedTo: assignedToParam }),
         ...(unassignedOnly && { unassignedOnly: true }),
         ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
@@ -448,11 +486,14 @@ const LeadsPage: React.FC = () => {
     if (!someSelected) return
     setBulkEditSaving(true)
     try {
-      const payload: { statusId?: string; assignedTo?: string[] } = {}
+      const payload: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null } = {}
       if (bulkEditStatusId !== '') payload.statusId = bulkEditStatusId === ' ' ? '' : bulkEditStatusId
+      if (bulkEditLeadTagId !== '' && bulkEditLeadTagId !== '__none__') {
+        payload.leadTagId = bulkEditLeadTagId === ' ' ? null : bulkEditLeadTagId
+      }
       if (bulkEditChangeAssignees) payload.assignedTo = Array.isArray(bulkEditAssignedTo) ? bulkEditAssignedTo : []
       if (Object.keys(payload).length === 0) {
-        toast.error('Выберите статус и/или отметьте «Изменить исполнителей»')
+        toast.error('Выберите статус, источник и/или отметьте «Изменить исполнителей»')
         setBulkEditSaving(false)
         return
       }
@@ -461,6 +502,7 @@ const LeadsPage: React.FC = () => {
       setBulkEditOpen(false)
       setSelectedLeadIds([])
       setBulkEditStatusId('')
+      setBulkEditLeadTagId('')
       setBulkEditChangeAssignees(false)
       setBulkEditAssignedTo([])
       await refetchLeads()
@@ -490,7 +532,6 @@ const LeadsPage: React.FC = () => {
   const handleLeadPageChange = (_e: unknown, newPage: number) => setLeadPage(newPage)
   const handleLeadRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLeadRowsPerPage(parseInt(e.target.value, 10))
-    setLeadPage(0)
   }
 
   const openLeadCreate = () => {
@@ -501,6 +542,7 @@ const LeadsPage: React.FC = () => {
     setLeadEmail('')
     setLeadEmail2('')
     setLeadStatusId('')
+    setLeadTagId('')
     setLeadAssignedTo([])
     setLeadLastName('')
     setLeadFormOpen(true)
@@ -515,6 +557,7 @@ const LeadsPage: React.FC = () => {
     setLeadEmail(lead.email ?? '')
     setLeadEmail2(lead.email2 ?? '')
     setLeadStatusId(lead.statusId ?? '')
+    setLeadTagId(lead.leadTagId ?? '')
     setLeadAssignedTo(lead.assignedTo ?? [])
     setLeadFormOpen(true)
   }
@@ -532,6 +575,7 @@ const LeadsPage: React.FC = () => {
           email2: leadEmail2.trim() || undefined,
           statusId: leadStatusId || undefined,
           assignedTo: leadAssignedTo,
+          leadTagId: leadTagId || null,
         }
         if (!isEmployee) {
           updatePayload.phone = leadPhone.trim() || undefined
@@ -554,6 +598,7 @@ const LeadsPage: React.FC = () => {
           statusId: leadStatusId || undefined,
           source: 'manual',
           assignedTo: leadAssignedTo,
+          leadTagId: leadTagId || undefined,
         })
         toast.success('Лид создан')
       }
@@ -646,6 +691,26 @@ const LeadsPage: React.FC = () => {
     }
   }
 
+  const openCommentPopup = (lead: LeadItem) => {
+    setCommentPopupLead(lead)
+    setCommentPopupValue('') // всегда пустое поле — чтобы добавить новый комментарий
+  }
+
+  const handleCommentPopupSave = async () => {
+    if (!commentPopupLead) return
+    setCommentPopupSaving(true)
+    try {
+      await updateLead(commentPopupLead._id, { comment: commentPopupValue.trim() })
+      toast.success('Комментарий сохранён')
+      await refetchLeads()
+      setCommentPopupLead(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCommentPopupSaving(false)
+    }
+  }
+
   const canAccess =
     user?.role === 'super' ||
     user?.role === 'admin' ||
@@ -669,8 +734,8 @@ const LeadsPage: React.FC = () => {
         color: 'rgba(255,255,255,0.9)',
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 160px)',
-        minHeight: 400,
+        height: 'calc(100vh - 120px)',
+        minHeight: 500,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2, flexShrink: 0 }}>
@@ -693,7 +758,11 @@ const LeadsPage: React.FC = () => {
               select
               label="Отдел"
               value={selectedDepartmentId}
-              onChange={(e) => setSelectedDepartmentId(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value
+                setSelectedDepartmentId(id)
+                setSearchParams((prev) => mergeSearchParams(prev, { departmentId: id || undefined, page: 0 }))
+              }}
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, minWidth: 260, ...formFieldSx }}
               SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
@@ -713,37 +782,55 @@ const LeadsPage: React.FC = () => {
                 </Typography>
               )}
             </Typography>
+            <TextField
+              size="small"
+              placeholder="Поиск по имени, телефону, email…"
+              value={leadFilterName}
+              onChange={(e) => setLeadFilterName(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+                sx: { color: 'rgba(255,255,255,0.95)', '& input': { py: 0.75 } },
+              }}
+              sx={{
+                minWidth: 260,
+                maxWidth: 320,
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'rgba(255,255,255,0.06)',
+                  '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                  '&.Mui-focused fieldset': { borderColor: 'rgba(167,139,250,0.6)' },
+                },
+              }}
+            />
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {!isEmployee && (
-                <Button
-                  size="small"
-                  variant={leadScope === 'all' ? 'contained' : 'outlined'}
-                  onClick={() => {
-                    setLeadScope('all')
-                    setLeadPage(0)
-                    setSearchParams((p) => {
-                      const next = new URLSearchParams(p)
-                      next.delete('scope')
-                      return next
-                    })
-                  }}
-                  sx={leadScope === 'all' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
-                >
-                  Все лиды
-                </Button>
+                <>
+                  <Button
+                    size="small"
+                    variant={leadScope === 'all' ? 'contained' : 'outlined'}
+                    onClick={() => setLeadScope('all')}
+                    sx={leadScope === 'all' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
+                  >
+                    Неназначенные
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={leadScope === 'department' ? 'contained' : 'outlined'}
+                    onClick={() => setLeadScope('department')}
+                    sx={leadScope === 'department' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
+                  >
+                    Все лиды отдела
+                  </Button>
+                </>
               )}
               <Button
                 size="small"
                 variant={leadScope === 'mine' ? 'contained' : 'outlined'}
-                onClick={() => {
-                  setLeadScope('mine')
-                  setLeadPage(0)
-                  setSearchParams((p) => {
-                    const next = new URLSearchParams(p)
-                    next.set('scope', 'mine')
-                    return next
-                  })
-                }}
+                onClick={() => setLeadScope('mine')}
                 sx={leadScope === 'mine' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
               >
                 Мои лиды
@@ -783,791 +870,182 @@ const LeadsPage: React.FC = () => {
             </Box>
           </Box>
 
-          <Drawer
-            anchor="right"
+          <LeadsFiltersDrawer
             open={filterDrawerOpen}
             onClose={() => setFilterDrawerOpen(false)}
-            sx={{
-              '& .MuiDrawer-paper': {
-                width: { xs: '100%', sm: '50%' },
-                maxWidth: 480,
-                bgcolor: 'rgba(15, 18, 32, 0.98)',
-                borderLeft: '1px solid rgba(255,255,255,0.08)',
-              },
-            }}
-          >
-            <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)' }}>
-                  Фильтры и сортировка
-                </Typography>
-                <IconButton onClick={() => setFilterDrawerOpen(false)} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'auto' }}>
-                <TextField label="Имя" value={leadFilterName} onChange={(e) => { setLeadFilterName(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} />
-                <TextField label="Телефон" value={leadFilterPhone} onChange={(e) => { setLeadFilterPhone(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} />
-                <TextField label="Email" value={leadFilterEmail} onChange={(e) => { setLeadFilterEmail(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} />
-                <TextField select label="Статус" value={leadFilterStatusId} onChange={(e) => { setLeadFilterStatusId(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} SelectProps={{ displayEmpty: true, sx: { color: 'rgba(255,255,255,0.95)' } }}>
-                  <MenuItem value="">Все статусы</MenuItem>
-                  {statuses.map((s) => (<MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>))}
-                </TextField>
-                <TextField select label="Обрабатывает" value={leadFilterAssignedTo} onChange={(e) => { setLeadFilterAssignedTo(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} SelectProps={{ displayEmpty: true, sx: { color: 'rgba(255,255,255,0.95)' } }}>
-                  <MenuItem value="">Все исполнители</MenuItem>
-                  {assigneeOptions.map((o) => (<MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>))}
-                </TextField>
-                <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
-                  <DatePicker
-                    label="Дата от (создан)"
-                    value={leadFilterDateFrom ? dayjs(leadFilterDateFrom) : null}
-                    onChange={(val: Dayjs | null) => {
-                      setLeadFilterDateFrom(val ? val.format('YYYY-MM-DD') : '')
-                      setLeadPage(0)
-                    }}
-                    slotProps={{
-                      popper: {
-                        sx: {
-                          '& .MuiPaper-root': {
-                            minWidth: 360,
-                            p: 2,
-                            '& .MuiDayCalendar-monthContainer': { width: '100%' },
-                            '& .MuiPickersDay-root': { width: 48, height: 48, fontSize: '1.05rem' },
-                            '& .MuiPickersCalendarHeader-label': { fontSize: '1.25rem' },
-                            '& .MuiDayCalendar-weekDayLabel': { width: 48, height: 40, fontSize: '1rem' },
-                          },
-                        },
-                      },
-                    }}
-                    sx={formFieldSx}
-                  />
-                  <DatePicker
-                    label="Дата по (создан)"
-                    value={leadFilterDateTo ? dayjs(leadFilterDateTo) : null}
-                    onChange={(val: Dayjs | null) => {
-                      setLeadFilterDateTo(val ? val.format('YYYY-MM-DD') : '')
-                      setLeadPage(0)
-                    }}
-                    slotProps={{
-                      popper: {
-                        sx: {
-                          '& .MuiPaper-root': {
-                            minWidth: 360,
-                            p: 2,
-                            '& .MuiDayCalendar-monthContainer': { width: '100%' },
-                            '& .MuiPickersDay-root': { width: 48, height: 48, fontSize: '1.05rem' },
-                            '& .MuiPickersCalendarHeader-label': { fontSize: '1.25rem' },
-                            '& .MuiDayCalendar-weekDayLabel': { width: 48, height: 40, fontSize: '1rem' },
-                          },
-                        },
-                      },
-                    }}
-                    sx={formFieldSx}
-                  />
-                </LocalizationProvider>
-                <TextField select label="Сортировка" value={leadSortBy} onChange={(e) => { setLeadSortBy(e.target.value); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}>
-                  <MenuItem value="createdAt">По дате создания</MenuItem>
-                  <MenuItem value="updatedAt">По дате изменения</MenuItem>
-                  <MenuItem value="name">По имени</MenuItem>
-                  <MenuItem value="phone">По телефону</MenuItem>
-                  <MenuItem value="email">По email</MenuItem>
-                  <MenuItem value="statusId">По статусу</MenuItem>
-                </TextField>
-                <TextField select label="Порядок" value={leadSortOrder} onChange={(e) => { setLeadSortOrder(e.target.value as 'asc' | 'desc'); setLeadPage(0) }} InputLabelProps={{ shrink: true }} fullWidth sx={formFieldSx} SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}>
-                  <MenuItem value="desc">По убыванию</MenuItem>
-                  <MenuItem value="asc">По возрастанию</MenuItem>
-                </TextField>
-              </Box>
-              <Button fullWidth variant="outlined" onClick={resetLeadFilters} sx={{ mt: 2, color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.3)' }}>
-                Сбросить фильтры
-              </Button>
-            </Box>
-          </Drawer>
+            name={leadFilterName}
+            onNameChange={setLeadFilterName}
+            phone={leadFilterPhone}
+            onPhoneChange={setLeadFilterPhone}
+            email={leadFilterEmail}
+            onEmailChange={setLeadFilterEmail}
+            statusId={leadFilterStatusId}
+            onStatusIdChange={setLeadFilterStatusId}
+            leadTagId={leadFilterLeadTagId}
+            onLeadTagIdChange={setLeadFilterLeadTagId}
+            leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+            assignedTo={leadFilterAssignedTo}
+            onAssignedToChange={setLeadFilterAssignedTo}
+            dateFrom={leadFilterDateFrom}
+            onDateFromChange={setLeadFilterDateFrom}
+            dateTo={leadFilterDateTo}
+            onDateToChange={setLeadFilterDateTo}
+            sortBy={leadSortBy}
+            onSortByChange={setLeadSortBy}
+            sortOrder={leadSortOrder}
+            onSortOrderChange={setLeadSortOrder}
+            statuses={statuses}
+            assigneeOptions={assigneeOptions}
+            onReset={resetLeadFilters}
+          />
 
-          {(canBulkEditLeads || canBulkDeleteLeads) && (
-            <Paper sx={{ p: 1.5, mb: 1, bgcolor: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 2, flexShrink: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                {someSelected && (
-                  <>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Выбрано: {selectedLeadIds.length}</Typography>
-                    {canBulkEditLeads && (
-                      <Button size="small" variant="outlined" onClick={() => setBulkEditOpen(true)} sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}>
-                        Изменить статус / исполнителей
-                      </Button>
-                    )}
-                    {canBulkDeleteLeads && (
-                      <Button size="small" variant="outlined" color="error" onClick={() => setBulkDeleteOpen(true)}>
-                        Удалить выбранные
-                      </Button>
-                    )}
-                    <Button size="small" onClick={() => setSelectedLeadIds([])} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                      Снять выделение
-                    </Button>
-                  </>
-                )}
-                {selectedDepartmentId && leadTotal > 0 && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={selectAllMatchingFilters}
-                    disabled={selectingAllIds}
-                    sx={{ color: 'rgba(167,139,250,0.95)', borderColor: 'rgba(167,139,250,0.5)' }}
-                  >
-                    {selectingAllIds ? 'Загрузка…' : `Выбрать все (${leadTotal})`}
-                  </Button>
-                )}
-              </Box>
-            </Paper>
-          )}
+          <LeadsBulkBar
+            show={canBulkEditLeads || canBulkDeleteLeads}
+            someSelected={someSelected}
+            selectedCount={selectedLeadIds.length}
+            total={leadTotal}
+            selectingAllIds={selectingAllIds}
+            canBulkEdit={canBulkEditLeads}
+            canBulkDelete={canBulkDeleteLeads}
+            onSelectAll={selectAllMatchingFilters}
+            onBulkEdit={() => setBulkEditOpen(true)}
+            onBulkDelete={() => setBulkDeleteOpen(true)}
+            onClearSelection={() => setSelectedLeadIds([])}
+          />
 
-          <TableContainer
-            component={Paper}
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              bgcolor: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 2,
-              overflow: 'auto',
-            }}
-          >
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {canBulkEditLeads && (
-                    <TableCell padding="checkbox" sx={{ bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>
-                      <Checkbox
-                        indeterminate={someSelected && !allSelectedOnPage}
-                        checked={allSelectedOnPage}
-                        onChange={toggleSelectAll}
-                        sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Имя</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Фамилия</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Телефон</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Email</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Статус</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Обрабатывает</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }}>Создан</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)', p: 0, py: 1, verticalAlign: 'middle' }}>
-                    <Tooltip title={leadSortBy === 'updatedAt' ? (leadSortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
-                      <Button
-                        size="small"
-                        endIcon={
-                          leadSortBy === 'updatedAt' ? (
-                            leadSortOrder === 'desc' ? (
-                              <ArrowDownwardIcon sx={{ fontSize: 18 }} />
-                            ) : (
-                              <ArrowUpwardIcon sx={{ fontSize: 18 }} />
-                            )
-                          ) : (
-                            <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
-                          )
-                        }
-                        onClick={() => {
-                          if (leadSortBy === 'updatedAt') {
-                            setLeadSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
-                          } else {
-                            setLeadSortBy('updatedAt')
-                            setLeadSortOrder('desc')
-                          }
-                          setLeadPage(0)
-                        }}
-                        sx={{
-                          color: leadSortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
-                          textTransform: 'none',
-                          minWidth: 0,
-                          py: 0.5,
-                          px: 1,
-                        }}
-                      >
-                        Изменён
-                      </Button>
-                    </Tooltip>
-                  </TableCell>
-                  {canCreateLead && (
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', width: 56, bgcolor: 'rgba(255,255,255,0.04)', verticalAlign: 'middle', py: 1 }} align="right" />
-                  )}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {leadLoading && leads.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8 + (canBulkEditLeads ? 1 : 0) + (canCreateLead ? 1 : 0)} sx={{ py: 2, textAlign: 'center' }}>
-                      <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
-                    </TableCell>
-                  </TableRow>
-                ) : leads.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8 + (canBulkEditLeads ? 1 : 0) + (canCreateLead ? 1 : 0)} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
-                      {canCreateLead ? 'Нет лидов. Нажмите «Добавить лид».' : 'Нет лидов.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  leads.map((lead) => (
-                    <TableRow key={lead._id} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
-                      {canBulkEditLeads && (
-                        <TableCell padding="checkbox" sx={{ verticalAlign: 'middle', py: 1 }}>
-                          <Checkbox
-                            checked={selectedLeadIds.includes(lead._id)}
-                            onChange={() => toggleSelectLead(lead._id)}
-                            sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell
-                        sx={{ color: 'rgba(255,255,255,0.95)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, verticalAlign: 'middle', py: 1 }}
-                        onClick={() => navigate(`/leads/${lead._id}${selectedDepartmentId ? `?departmentId=${selectedDepartmentId}` : ''}`)}
-                      >
-                        {lead.name}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>{lead.lastName || '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                          <Tooltip title={lead.phone ? 'Нажмите, чтобы скопировать' : ''}>
-                            <Box
-                              component="span"
-                              sx={{ ...(lead.phone && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }) }}
-                              onClick={(e) => { e.stopPropagation(); if (lead.phone?.trim()) { navigator.clipboard.writeText(lead.phone.trim()); toast.success('Телефон скопирован') } }}
-                            >
-                              {lead.phone || '—'}
-                            </Box>
-                          </Tooltip>
-                          {(lead.phone2 ?? '').trim() ? (
-                            <Tooltip title="Нажмите, чтобы скопировать">
-                              <Box
-                                component="span"
-                                sx={{ fontSize: '0.85rem', opacity: 0.9, cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }}
-                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((lead.phone2 ?? '').trim()); toast.success('Телефон 2 скопирован') }}
-                              >
-                                {lead.phone2?.trim()}
-                              </Box>
-                            </Tooltip>
-                          ) : null}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                          <Tooltip title={lead.email ? 'Нажмите, чтобы скопировать' : ''}>
-                            <Box
-                              component="span"
-                              sx={{ ...(lead.email && { cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }) }}
-                              onClick={(e) => { e.stopPropagation(); if (lead.email?.trim()) { navigator.clipboard.writeText(lead.email.trim()); toast.success('Email скопирован') } }}
-                            >
-                              {lead.email || '—'}
-                            </Box>
-                          </Tooltip>
-                          {(lead.email2 ?? '').trim() ? (
-                            <Tooltip title="Нажмите, чтобы скопировать">
-                              <Box
-                                component="span"
-                                sx={{ fontSize: '0.85rem', opacity: 0.9, cursor: 'pointer', '&:hover': { color: 'rgba(167,139,250,0.9)' } }}
-                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText((lead.email2 ?? '').trim()); toast.success('Email 2 скопирован') }}
-                              >
-                                {lead.email2?.trim()}
-                              </Box>
-                            </Tooltip>
-                          ) : null}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                        {canCreateLead ? (
-                          <Select
-                            size="small"
-                            value={lead.statusId ?? ''}
-                            onChange={(e) => handleLeadStatusChange(lead._id, e.target.value)}
-                            disabled={updatingLeadId === lead._id}
-                            displayEmpty
-                            sx={{
-                              minWidth: 140,
-                              color: 'rgba(255,255,255,0.95)',
-                              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                              '& .MuiSelect-select': { py: 0.5 },
-                            }}
-                            renderValue={(v) => {
-                              if (!v) return '— Не выбран'
-                              const st = statuses.find((s) => s._id === v)
-                              if (!st) return '—'
-                              return (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: st.color || '#9ca3af', flexShrink: 0 }} />
-                                  <span>{st.name}</span>
-                                </Box>
-                              )
-                            }}
-                          >
-                            <MenuItem value="">— Не выбран</MenuItem>
-                            {statuses.map((s) => (
-                              <MenuItem key={s._id} value={s._id}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color || '#9ca3af', flexShrink: 0 }} />
-                                  <span>{s.name}</span>
-                                </Box>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        ) : lead.statusId ? (() => {
-                          const st = statuses.find((s) => s._id === lead.statusId)
-                          if (!st) return '—'
-                          return (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: st.color || '#9ca3af', flexShrink: 0 }} />
-                              <span>{st.name}</span>
-                            </Box>
-                          )
-                        })() : '—'}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                        {canCreateLead ? (
-                          isEmployee ? (
-                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                              {lead.assignedTo?.includes(user?.userId ?? '') ? 'На мне' : (lead.assignedTo?.length ? (lead.assignedTo.map((id) => assigneeNameMap[id] || id).join(', ')) : '— Никого')}
-                            </Typography>
-                          ) : (
-                            <Select
-                              size="small"
-                              multiple
-                              value={lead.assignedTo ?? []}
-                              onChange={(e) => handleLeadAssignedToChange(lead._id, e.target.value as string[])}
-                              disabled={updatingLeadId === lead._id}
-                              displayEmpty
-                              sx={{
-                                minWidth: 140,
-                                color: 'rgba(255,255,255,0.95)',
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
-                                '& .MuiSelect-select': { py: 0.5 },
-                              }}
-                              renderValue={(selected) =>
-                                (selected as string[]).length
-                                  ? (selected as string[]).map((id) => assigneeNameMap[id] || id).join(', ')
-                                  : '— Никого'
-                              }
-                            >
-                              {assigneeOptions.map((o) => (
-                                <MenuItem key={o.id} value={o.id}>
-                                  {o.label}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          )
-                        ) : lead.assignedTo?.length
-                          ? (lead.assignedTo.map((id) => assigneeNameMap[id]).filter(Boolean).join(', ') || '—')
-                          : '—'}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.createdAt)}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.updatedAt)}</TableCell>
-                      {canCreateLead && (
-                        <TableCell align="right" sx={{ verticalAlign: 'middle', py: 1 }}>
-                          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 0 }}>
-                            <Tooltip title="Редактировать">
-                              <IconButton size="small" onClick={() => openLeadEdit(lead)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Удалить">
-                              <IconButton size="small" onClick={() => setLeadDeleteId(lead._id)} sx={{ color: 'rgba(248,113,113,0.8)' }}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          <TablePagination
-            component="div"
-            count={leadTotal}
+          <LeadsTable
+            leads={leads}
+            loading={leadLoading}
+            total={leadTotal}
             page={leadPage}
-            onPageChange={handleLeadPageChange}
             rowsPerPage={leadRowsPerPage}
+            onPageChange={handleLeadPageChange}
             onRowsPerPageChange={handleLeadRowsPerPageChange}
-            rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
-            labelRowsPerPage="Строк на странице:"
-            labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count !== -1 ? count : `более ${to}`}`}
-            sx={{
-              flexShrink: 0,
-              color: 'rgba(255,255,255,0.8)',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
-              '& .MuiTablePagination-selectIcon': { color: 'rgba(255,255,255,0.8)' },
+            statuses={statuses}
+            leadTagMap={leadTagMap}
+            leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+            onLeadTagChange={handleLeadTagChange}
+            assigneeOptions={assigneeOptions}
+            assigneeNameMap={assigneeNameMap}
+            canBulkEdit={canBulkEditLeads}
+            canCreateLead={!!canCreateLead}
+            isEmployee={isEmployee}
+            currentUserId={user?.userId}
+            selectedLeadIds={selectedLeadIds}
+            allSelectedOnPage={allSelectedOnPage}
+            someSelected={someSelected}
+            onToggleSelectAll={toggleSelectAll}
+            onToggleSelectLead={toggleSelectLead}
+            sortBy={leadSortBy}
+            sortOrder={leadSortOrder}
+            onSortUpdatedAt={() => {
+              if (leadSortBy === 'updatedAt') setLeadSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+              else { setLeadSortBy('updatedAt'); setLeadSortOrder('desc') }
+              setLeadPage(0)
             }}
+            onStatusChange={handleLeadStatusChange}
+            onAssignedToChange={handleLeadAssignedToChange}
+            onEditLead={openLeadEdit}
+            onDeleteLead={setLeadDeleteId}
+            updatingLeadId={updatingLeadId}
+            onLeadClick={(id) => navigate(`/leads/${id}${selectedDepartmentId ? `?departmentId=${selectedDepartmentId}` : ''}`)}
+            onCommentClick={canCreateLead ? openCommentPopup : undefined}
+            onCopyPhone={() => toast.success('Телефон скопирован')}
+            onCopyEmail={() => toast.success('Email скопирован')}
           />
         </>
       )}
 
-      <Dialog
+      <LeadFormDialog
         open={leadFormOpen}
         onClose={() => !leadSaving && setLeadFormOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>
-          {leadEditId ? 'Редактировать лид' : 'Новый лид'}
-        </DialogTitle>
-        <Box component="form" onSubmit={handleLeadSubmit}>
-          <DialogContent sx={{ pt: 2 }}>
-            <TextField
-              label="Имя"
-              value={leadName}
-              onChange={(e) => setLeadName(e.target.value)}
-              required
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              label="Фамилия"
-              value={leadLastName}
-              onChange={(e) => setLeadLastName(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              label="Телефон"
-              value={leadPhone}
-              onChange={(e) => setLeadPhone(e.target.value)}
-              fullWidth
-              disabled={Boolean(leadEditId && isEmployee && editingLead?.phone?.trim())}
-              helperText={leadEditId && isEmployee && editingLead?.phone?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              label="Телефон 2"
-              value={leadPhone2}
-              onChange={(e) => setLeadPhone2(e.target.value)}
-              fullWidth
-              disabled={Boolean(leadEditId && isEmployee && editingLead?.phone2?.trim())}
-              helperText={leadEditId && isEmployee && editingLead?.phone2?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              label="Email"
-              type="email"
-              value={leadEmail}
-              onChange={(e) => setLeadEmail(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              label="Email 2"
-              type="email"
-              value={leadEmail2}
-              onChange={(e) => setLeadEmail2(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-            />
-            <TextField
-              select
-              label="Статус"
-              value={leadStatusId}
-              onChange={(e) => setLeadStatusId(e.target.value)}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, ...formFieldSx }}
-              SelectProps={{
-                sx: { color: 'rgba(255,255,255,0.95)' },
-                renderValue: (v) => {
-                  if (!v) return '— Не выбран'
-                  const st = statuses.find((s) => s._id === v)
-                  if (!st) return String(v)
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: st.color || '#9ca3af', flexShrink: 0 }} />
-                      <span>{st.name}</span>
-                    </Box>
-                  )
-                },
-              }}
-            >
-              <MenuItem value="">— Не выбран</MenuItem>
-              {statuses.map((s) => (
-                <MenuItem key={s._id} value={s._id}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: s.color || '#9ca3af', flexShrink: 0 }} />
-                    <span>{s.name}</span>
-                  </Box>
-                </MenuItem>
-              ))}
-            </TextField>
-            {assigneeOptions.length > 0 && (
-              isEmployee ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>Обрабатывает</Typography>
-                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)', mt: 0.5 }}>
-                    {leadAssignedTo?.length ? leadAssignedTo.map((id) => assigneeNameMap[id] || id).join(', ') : '— Никого'}
-                  </Typography>
-                </Box>
-              ) : (
-                <TextField
-                  select
-                  SelectProps={{
-                    multiple: true,
-                    sx: { color: 'rgba(255,255,255,0.95)' },
-                    renderValue: (selected: unknown) =>
-                      (selected as string[]).length
-                        ? (selected as string[]).map((id) => assigneeNameMap[id] || id).join(', ')
-                        : '— Никого',
-                  }}
-                  label="Обрабатывает"
-                  value={leadAssignedTo}
-                  onChange={(e) => setLeadAssignedTo(Array.isArray(e.target.value) ? e.target.value : [])}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  sx={{ mb: 2, ...formFieldSx }}
-                >
-                  {assigneeOptions.map((o) => (
-                    <MenuItem key={o.id} value={o.id}>
-                      {o.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )
-            )}
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setLeadFormOpen(false)} disabled={leadSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Отмена
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={leadSaving || !leadName.trim()}
-              sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-            >
-              {leadSaving ? 'Сохранение…' : leadEditId ? 'Сохранить' : 'Создать'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
+        onSubmit={handleLeadSubmit}
+        saving={leadSaving}
+        isEdit={!!leadEditId}
+        name={leadName}
+        onNameChange={setLeadName}
+        lastName={leadLastName}
+        onLastNameChange={setLeadLastName}
+        phone={leadPhone}
+        onPhoneChange={setLeadPhone}
+        phone2={leadPhone2}
+        onPhone2Change={setLeadPhone2}
+        email={leadEmail}
+        onEmailChange={setLeadEmail}
+        email2={leadEmail2}
+        onEmail2Change={setLeadEmail2}
+        statusId={leadStatusId}
+        onStatusIdChange={setLeadStatusId}
+        leadTagId={leadTagId}
+        onLeadTagIdChange={setLeadTagId}
+        leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+        assignedTo={leadAssignedTo}
+        onAssignedToChange={setLeadAssignedTo}
+        statuses={statuses}
+        assigneeOptions={assigneeOptions}
+        assigneeNameMap={assigneeNameMap}
+        isEmployee={isEmployee}
+        phoneDisabled={Boolean(leadEditId && isEmployee && editingLead?.phone?.trim())}
+        phone2Disabled={Boolean(leadEditId && isEmployee && editingLead?.phone2?.trim())}
+        phoneHelperText={leadEditId && isEmployee && editingLead?.phone?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
+        phone2HelperText={leadEditId && isEmployee && editingLead?.phone2?.trim() ? 'Только руководитель может изменить' : leadEditId && isEmployee ? 'Можно добавить, если пусто' : undefined}
+      />
 
-      <Dialog
+      <LeadDeleteDialog
         open={!!leadDeleteId}
         onClose={() => !leadDeleting && setLeadDeleteId(null)}
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить лид?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            Лид будет удалён. Действие нельзя отменить.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setLeadDeleteId(null)} disabled={leadDeleting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleLeadDelete}
-            disabled={leadDeleting}
-            sx={{ bgcolor: 'rgba(248,113,113,0.9)', '&:hover': { bgcolor: 'rgba(248,113,113,1)' } }}
-          >
-            {leadDeleting ? 'Удаление…' : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleLeadDelete}
+        deleting={leadDeleting}
+      />
 
-      <Dialog
+      <LeadCommentPopup
+        open={!!commentPopupLead}
+        onClose={() => !commentPopupSaving && setCommentPopupLead(null)}
+        leadName={commentPopupLead ? [commentPopupLead.name, commentPopupLead.lastName].filter(Boolean).join(' ').trim() || undefined : undefined}
+        comment={commentPopupValue}
+        onCommentChange={setCommentPopupValue}
+        onSave={handleCommentPopupSave}
+        saving={commentPopupSaving}
+      />
+
+      <BulkEditDialog
         open={bulkEditOpen}
         onClose={() => !bulkEditSaving && setBulkEditOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Массовое редактирование ({selectedLeadIds.length} лидов)</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <TextField
-            select
-            fullWidth
-            label="Установить статус"
-            value={bulkEditStatusId === '' ? '__none__' : bulkEditStatusId}
-            onChange={(e) => setBulkEditStatusId(e.target.value === '__none__' ? '' : e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2, ...formFieldSx }}
-            SelectProps={{
-              sx: { color: 'rgba(255,255,255,0.95)' },
-              renderValue: (v) => {
-                if (!v || v === '__none__') return '— Не менять'
-                const st = statuses.find((s) => s._id === v)
-                if (!st) return String(v)
-                return (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: st.color || '#9ca3af', flexShrink: 0 }} />
-                    <span>{st.name}</span>
-                  </Box>
-                )
-              },
-            }}
-          >
-            <MenuItem value="__none__">— Не менять</MenuItem>
-            <MenuItem value=" ">— Сбросить статус</MenuItem>
-            {statuses.map((s) => (
-              <MenuItem key={s._id} value={s._id}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: s.color || '#9ca3af', flexShrink: 0 }} />
-                  <span>{s.name}</span>
-                </Box>
-              </MenuItem>
-            ))}
-          </TextField>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <Checkbox
-              checked={bulkEditChangeAssignees}
-              onChange={(e) => setBulkEditChangeAssignees(e.target.checked)}
-              sx={{ color: 'rgba(255,255,255,0.6)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-            />
-            <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Изменить исполнителей</Typography>
-          </Box>
-          {bulkEditChangeAssignees && (
-            <FormControl fullWidth sx={{ mb: 2, ...formFieldSx }}>
-              <InputLabel id="bulk-edit-assignees-label" shrink>Исполнители</InputLabel>
-              <Select
-                labelId="bulk-edit-assignees-label"
-                label="Исполнители"
-                multiple
-                value={bulkEditAssignedToSafe}
-                onChange={(e) => {
-                  const v = e.target.value
-                  const next = Array.isArray(v) ? v : (v === undefined || v === null ? [] : [String(v)])
-                  setBulkEditAssignedTo(next)
-                }}
-                renderValue={(selected) => {
-                  const arr = Array.isArray(selected) ? selected : []
-                  if (!arr.length) return '— Никого'
-                  return arr.map((id) => assigneeNameMap[id] || id).join(', ')
-                }}
-                variant="outlined"
-                sx={{ color: 'rgba(255,255,255,0.95)' }}
-              >
-                {assigneeOptions.map((o) => (
-                  <MenuItem key={o.id} value={o.id}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-            Статус: «Не менять» — не трогать; «Сбросить» — убрать статус. Исполнители: если включено и пусто — снять назначение.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setBulkEditOpen(false)} disabled={bulkEditSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleBulkEditApply}
-            disabled={bulkEditSaving}
-            sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-          >
-            {bulkEditSaving ? 'Сохранение…' : 'Применить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onApply={handleBulkEditApply}
+        saving={bulkEditSaving}
+        selectedCount={selectedLeadIds.length}
+        statusId={bulkEditStatusId}
+        onStatusIdChange={setBulkEditStatusId}
+        leadTagId={bulkEditLeadTagId}
+        onLeadTagIdChange={setBulkEditLeadTagId}
+        leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+        changeAssignees={bulkEditChangeAssignees}
+        onChangeAssigneesChange={setBulkEditChangeAssignees}
+        assignedTo={bulkEditAssignedToSafe}
+        onAssignedToChange={setBulkEditAssignedTo}
+        statuses={statuses}
+        assigneeOptions={assigneeOptions}
+        assigneeNameMap={assigneeNameMap}
+      />
 
-      <Dialog
+      <BulkDeleteDialog
         open={bulkDeleteOpen}
         onClose={() => !bulkDeleteSaving && setBulkDeleteOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Удалить выбранные лиды?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            Будет удалено лидов: <strong>{selectedLeadIds.length}</strong>. Отменить действие нельзя.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleteSaving} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleBulkDelete}
-            disabled={bulkDeleteSaving}
-          >
-            {bulkDeleteSaving ? 'Удаление…' : 'Удалить'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleBulkDelete}
+        count={selectedLeadIds.length}
+        saving={bulkDeleteSaving}
+      />
 
-      <Dialog
+      <BulkImportDialog
         open={bulkDialogOpen}
         onClose={() => !bulkSubmitting && setBulkDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { bgcolor: 'rgba(18, 22, 36, 0.98)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 },
-        }}
-      >
-        <DialogTitle sx={{ color: 'rgba(255,255,255,0.95)' }}>Массовое добавление лидов</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography sx={{ color: 'rgba(255,255,255,0.7)', mb: 2 }}>
-            Загрузите файл (Excel .xlsx, CSV, TXT): 1-й столбец — имя, 2-й — телефон, 3-й — почта (необязательно). Дубликаты по телефону в отделе не добавляются.
-          </Typography>
-          <input
-            type="file"
-            ref={bulkFileInputRef}
-            accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            style={{ display: 'none' }}
-            onChange={handleBulkFileChange}
-          />
-          <Button
-            size="small"
-            startIcon={<UploadIcon />}
-            onClick={() => bulkFileInputRef.current?.click()}
-            disabled={bulkSubmitting}
-            sx={{ mb: 2, color: 'rgba(167,139,250,0.9)' }}
-          >
-            Загрузить из файла
-          </Button>
-          {bulkParsedItems !== null && bulkParsedItems.length > 0 && (
-            <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
-              Загружено строк: {bulkParsedItems.length}
-            </Typography>
-          )}
-          {bulkResult !== null && (
-            <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.9)' }}>
-              Добавлено: <strong>{bulkResult.added}</strong>. Дубликатов (не добавлено): <strong>{bulkResult.duplicates}</strong>.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setBulkDialogOpen(false)} disabled={bulkSubmitting} sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            Закрыть
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleBulkSubmit}
-            disabled={bulkSubmitting || !bulkParsedItems?.length}
-            sx={{ bgcolor: 'rgba(124, 58, 237, 0.9)', '&:hover': { bgcolor: 'rgba(124, 58, 237, 1)' } }}
-          >
-            {bulkSubmitting ? 'Импорт…' : 'Импортировать'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSubmit={handleBulkSubmit}
+        submitting={bulkSubmitting}
+        parsedCount={bulkParsedItems?.length ?? null}
+        result={bulkResult}
+        fileInputRef={bulkFileInputRef}
+        onFileChange={handleBulkFileChange}
+      />
     </Box>
   )
 }
