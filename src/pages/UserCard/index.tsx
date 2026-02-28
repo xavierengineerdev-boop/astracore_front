@@ -799,7 +799,7 @@ const UserCardPage: React.FC = () => {
                       <TableCell padding="checkbox" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
                         <Checkbox
                           indeterminate={selectedUserCardLeadIds.length > 0 && !allSelectedOnUserCardPage}
-                          checked={allSelectedOnUserCardPage}
+                          checked={allSelectedOnUserCardPage ?? false}
                           onChange={toggleSelectAllUserCardLeads}
                           sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
                         />

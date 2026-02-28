@@ -293,7 +293,7 @@ const LeadsPage: React.FC = () => {
       ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
       ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
       sortBy: leadSortBy,
-      sortOrder: leadSortOrder,
+      sortOrder: leadSortOrder as 'asc' | 'desc',
     }
     Promise.all([
       getStatusesByDepartment(selectedDepartmentId),
@@ -358,7 +358,7 @@ const LeadsPage: React.FC = () => {
         ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
         ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
         sortBy: leadSortBy,
-        sortOrder: leadSortOrder,
+        sortOrder: leadSortOrder as 'asc' | 'desc',
       })
       setLeads(data.items)
       setLeadTotal(data.total)
@@ -459,7 +459,7 @@ const LeadsPage: React.FC = () => {
         ...(leadFilterDateFrom.trim() && { dateFrom: leadFilterDateFrom.trim() }),
         ...(leadFilterDateTo.trim() && { dateTo: leadFilterDateTo.trim() }),
         sortBy: leadSortBy,
-        sortOrder: leadSortOrder,
+        sortOrder: leadSortOrder as 'asc' | 'desc',
       }
       const chunkSize = 100
       let allIds: string[] = []
@@ -939,7 +939,7 @@ const LeadsPage: React.FC = () => {
             sortBy={leadSortBy}
             sortOrder={leadSortOrder}
             onSortUpdatedAt={() => {
-              if (leadSortBy === 'updatedAt') setLeadSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+              if (leadSortBy === 'updatedAt') setLeadSortOrder(leadSortOrder === 'desc' ? 'asc' : 'desc')
               else { setLeadSortBy('updatedAt'); setLeadSortOrder('desc') }
               setLeadPage(0)
             }}
