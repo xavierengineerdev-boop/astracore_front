@@ -12,6 +12,7 @@ export interface LeadInfoCardProps {
   departmentName: string | null
   statusItem: StatusItem | undefined
   assignedNames: string
+  closerName: string
   onCopyPhone: () => void
   onCopyEmail: () => void
   onCopyPhone2?: () => void
@@ -23,6 +24,7 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
   departmentName,
   statusItem,
   assignedNames,
+  closerName,
   onCopyPhone,
   onCopyEmail,
   onCopyPhone2,
@@ -88,6 +90,10 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
         <Box sx={fieldSx}>
           <Typography variant="caption" color="rgba(255,255,255,0.5)">Обрабатывает</Typography>
           <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{assignedNames}</Typography>
+        </Box>
+        <Box sx={fieldSx}>
+          <Typography variant="caption" color="rgba(255,255,255,0.5)">Ответственный (клоузер)</Typography>
+          <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>{closerName}</Typography>
         </Box>
         <Box sx={fieldSx}>
           <Typography variant="caption" color="rgba(255,255,255,0.5)">Отдел</Typography>

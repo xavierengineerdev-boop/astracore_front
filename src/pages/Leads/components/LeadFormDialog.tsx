@@ -37,6 +37,8 @@ export interface LeadFormDialogProps {
   leadTagId: string
   onLeadTagIdChange: (v: string) => void
   leadTagOptions: { id: string; name: string; color: string }[]
+  closerId: string
+  onCloserIdChange: (v: string) => void
   assignedTo: string[]
   onAssignedToChange: (v: string[]) => void
   statuses: StatusItem[]
@@ -72,6 +74,8 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({
   leadTagId,
   onLeadTagIdChange,
   leadTagOptions,
+  closerId,
+  onCloserIdChange,
   assignedTo,
   onAssignedToChange,
   statuses,
@@ -209,6 +213,25 @@ const LeadFormDialog: React.FC<LeadFormDialogProps> = ({
             </MenuItem>
           ))}
         </TextField>
+        {assigneeOptions.length > 0 && (
+          <TextField
+            select
+            label="Ответственный (клоузер)"
+            value={closerId}
+            onChange={(e) => onCloserIdChange(e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+            sx={{ mb: 2, ...formFieldSx }}
+            SelectProps={{ displayEmpty: true, sx: { color: 'rgba(255,255,255,0.95)' } }}
+          >
+            <MenuItem value="">— Не выбран</MenuItem>
+            {assigneeOptions.map((o) => (
+              <MenuItem key={o.id} value={o.id}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
         {assigneeOptions.length > 0 &&
           (isEmployee ? (
             <Box sx={{ mb: 2 }}>

@@ -362,7 +362,7 @@ const MainLayout: React.FC = () => {
                       } catch {
                         // keep in list on error
                       }
-                      navigate(`/leads/${r.leadId}`)
+                      window.open(`/leads/${r.leadId}`, '_blank', 'noopener,noreferrer')
                     }}
                     sx={{
                       flexDirection: 'column',

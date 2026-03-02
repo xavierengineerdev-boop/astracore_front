@@ -210,10 +210,10 @@ const Dashboard: React.FC = () => {
           ) : (
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <RecentLeadsBlock leads={recentLeads} onLeadClick={(id) => navigate(`/leads/${id}`)} />
+                <RecentLeadsBlock leads={recentLeads} onLeadClick={(id) => window.open(`/leads/${id}`, '_blank', 'noopener,noreferrer')} />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <UpcomingRemindersBlock reminders={upcomingReminders} onReminderClick={(leadId) => navigate(`/leads/${leadId}`)} />
+                <UpcomingRemindersBlock reminders={upcomingReminders} onReminderClick={(leadId) => window.open(`/leads/${leadId}`, '_blank', 'noopener,noreferrer')} />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <DepartmentsSummaryBlock departments={departmentsSummary} onDepartmentClick={(id) => navigate(`/leads?departmentId=${id}`)} />
@@ -225,7 +225,7 @@ const Dashboard: React.FC = () => {
                 <AttentionBlock counts={attentionCounts} onLeadsClick={() => navigate('/leads')} />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <WeekEventsBlock events={weekEvents} onEventClick={(leadId) => navigate(`/leads/${leadId}`)} />
+                <WeekEventsBlock events={weekEvents} onEventClick={(leadId) => window.open(`/leads/${leadId}`, '_blank', 'noopener,noreferrer')} />
               </Grid>
             </Grid>
           )}

@@ -942,7 +942,7 @@ const UserCardPage: React.FC = () => {
                         <Tooltip title="Открыть карточку лида">
                           <IconButton
                             size="small"
-                            onClick={() => navigate(`/leads/${lead._id}${lead.departmentId ? `?departmentId=${lead.departmentId}` : ''}`)}
+                            onClick={() => window.open(`/leads/${lead._id}${lead.departmentId ? `?departmentId=${lead.departmentId}` : ''}`, '_blank', 'noopener,noreferrer')}
                             sx={{ color: 'rgba(167,139,250,0.9)' }}
                           >
                             <OpenInNewIcon fontSize="small" />

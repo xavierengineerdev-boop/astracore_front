@@ -43,6 +43,8 @@ export type LeadItem = {
   sourceMeta?: LeadSourceMeta
   createdBy: string
   assignedTo: string[]
+  /** Ответственный за закрытие (клоузер) */
+  closerId?: string | null
   comment?: string
   createdAt: string
   updatedAt: string
@@ -128,6 +130,7 @@ export async function createLead(data: {
   siteId?: string
   assignedTo?: string[]
   leadTagId?: string | null
+  closerId?: string | null
 }): Promise<LeadItem> {
   const res = await authenticatedFetch(`${API_BASE}/leads`, {
     method: 'POST',
@@ -138,7 +141,7 @@ export async function createLead(data: {
 
 export async function updateLead(
   id: string,
-  data: { name?: string; lastName?: string; phone?: string; phone2?: string; email?: string; email2?: string; statusId?: string; assignedTo?: string[]; comment?: string; leadTagId?: string | null },
+  data: { name?: string; lastName?: string; phone?: string; phone2?: string; email?: string; email2?: string; statusId?: string; assignedTo?: string[]; comment?: string; leadTagId?: string | null; closerId?: string | null },
 ): Promise<LeadItem> {
   const res = await authenticatedFetch(`${API_BASE}/leads/${id}`, {
     method: 'PATCH',
@@ -369,7 +372,7 @@ export type BulkUpdateLeadsResult = {
 
 export async function bulkUpdateLeads(
   leadIds: string[],
-  dto: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null },
+  dto: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null; closerId?: string | null },
 ): Promise<BulkUpdateLeadsResult> {
   const res = await authenticatedFetch(`${API_BASE}/leads/bulk`, {
     method: 'PATCH',

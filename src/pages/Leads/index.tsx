@@ -107,8 +107,8 @@ const LeadsPage: React.FC = () => {
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkEditStatusId, setBulkEditStatusId] = useState('')
   const [bulkEditLeadTagId, setBulkEditLeadTagId] = useState('')
-  const [bulkEditChangeAssignees, setBulkEditChangeAssignees] = useState(false)
-  const [bulkEditAssignedTo, setBulkEditAssignedTo] = useState<string[]>([])
+  const [bulkEditCloserId, setBulkEditCloserId] = useState('')
+  const [bulkEditAssignedTo, setBulkEditAssignedTo] = useState<string[]>(['__none__'])
   const [bulkEditSaving, setBulkEditSaving] = useState(false)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false)
@@ -122,6 +122,7 @@ const LeadsPage: React.FC = () => {
   const [leadEmail2, setLeadEmail2] = useState('')
   const [leadStatusId, setLeadStatusId] = useState('')
   const [leadTagId, setLeadTagId] = useState('')
+  const [leadCloserId, setLeadCloserId] = useState('')
   const [leadAssignedTo, setLeadAssignedTo] = useState<string[]>([])
   const [leadSaving, setLeadSaving] = useState(false)
   const [departmentDetail, setDepartmentDetail] = useState<DepartmentDetail | null>(null)
@@ -429,6 +430,19 @@ const LeadsPage: React.FC = () => {
     }
   }
 
+  const handleCloserChange = async (leadId: string, closerId: string | null) => {
+    setUpdatingLeadId(leadId)
+    try {
+      await updateLead(leadId, { closerId })
+      setLeads((prev) => prev.map((l) => (l._id === leadId ? { ...l, closerId } : l)))
+      toast.success('Клоузер обновлён')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
   const allSelectedOnPage = leads.length > 0 && leads.every((l) => selectedLeadIds.includes(l._id))
   const someSelected = selectedLeadIds.length > 0
   const toggleSelectAll = () => {
@@ -486,14 +500,21 @@ const LeadsPage: React.FC = () => {
     if (!someSelected) return
     setBulkEditSaving(true)
     try {
-      const payload: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null } = {}
+      const payload: { statusId?: string; assignedTo?: string[]; leadTagId?: string | null; closerId?: string | null } = {}
       if (bulkEditStatusId !== '') payload.statusId = bulkEditStatusId === ' ' ? '' : bulkEditStatusId
       if (bulkEditLeadTagId !== '' && bulkEditLeadTagId !== '__none__') {
         payload.leadTagId = bulkEditLeadTagId === ' ' ? null : bulkEditLeadTagId
       }
-      if (bulkEditChangeAssignees) payload.assignedTo = Array.isArray(bulkEditAssignedTo) ? bulkEditAssignedTo : []
+      if (bulkEditCloserId !== '' && bulkEditCloserId !== '__none__') {
+        payload.closerId = bulkEditCloserId === ' ' ? null : bulkEditCloserId
+      }
+      const assigneesVal = Array.isArray(bulkEditAssignedTo) ? bulkEditAssignedTo : []
+      const isNoneAssignees = assigneesVal.length === 1 && assigneesVal[0] === '__none__'
+      if (!isNoneAssignees) {
+        payload.assignedTo = assigneesVal.filter((id) => id !== '__none__' && id !== '__clear__')
+      }
       if (Object.keys(payload).length === 0) {
-        toast.error('Выберите статус, источник и/или отметьте «Изменить исполнителей»')
+        toast.error('Выберите статус, источник, клоузера и/или исполнителей')
         setBulkEditSaving(false)
         return
       }
@@ -503,8 +524,8 @@ const LeadsPage: React.FC = () => {
       setSelectedLeadIds([])
       setBulkEditStatusId('')
       setBulkEditLeadTagId('')
-      setBulkEditChangeAssignees(false)
-      setBulkEditAssignedTo([])
+      setBulkEditCloserId('')
+      setBulkEditAssignedTo(['__none__'])
       await refetchLeads()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
@@ -543,7 +564,8 @@ const LeadsPage: React.FC = () => {
     setLeadEmail2('')
     setLeadStatusId('')
     setLeadTagId('')
-    setLeadAssignedTo([])
+    setLeadCloserId('')
+    setLeadAssignedTo(isEmployee && user?.userId ? [user.userId] : [])
     setLeadLastName('')
     setLeadFormOpen(true)
   }
@@ -558,6 +580,7 @@ const LeadsPage: React.FC = () => {
     setLeadEmail2(lead.email2 ?? '')
     setLeadStatusId(lead.statusId ?? '')
     setLeadTagId(lead.leadTagId ?? '')
+    setLeadCloserId(lead.closerId ?? '')
     setLeadAssignedTo(lead.assignedTo ?? [])
     setLeadFormOpen(true)
   }
@@ -576,6 +599,7 @@ const LeadsPage: React.FC = () => {
           statusId: leadStatusId || undefined,
           assignedTo: leadAssignedTo,
           leadTagId: leadTagId || null,
+          closerId: leadCloserId || null,
         }
         if (!isEmployee) {
           updatePayload.phone = leadPhone.trim() || undefined
@@ -599,6 +623,7 @@ const LeadsPage: React.FC = () => {
           source: 'manual',
           assignedTo: leadAssignedTo,
           leadTagId: leadTagId || undefined,
+          closerId: leadCloserId || undefined,
         })
         toast.success('Лид создан')
       }
@@ -908,7 +933,10 @@ const LeadsPage: React.FC = () => {
             canBulkEdit={canBulkEditLeads}
             canBulkDelete={canBulkDeleteLeads}
             onSelectAll={selectAllMatchingFilters}
-            onBulkEdit={() => setBulkEditOpen(true)}
+            onBulkEdit={() => {
+              setBulkEditAssignedTo(['__none__'])
+              setBulkEditOpen(true)
+            }}
             onBulkDelete={() => setBulkDeleteOpen(true)}
             onClearSelection={() => setSelectedLeadIds([])}
           />
@@ -945,10 +973,11 @@ const LeadsPage: React.FC = () => {
             }}
             onStatusChange={handleLeadStatusChange}
             onAssignedToChange={handleLeadAssignedToChange}
+            onCloserChange={handleCloserChange}
             onEditLead={openLeadEdit}
             onDeleteLead={setLeadDeleteId}
             updatingLeadId={updatingLeadId}
-            onLeadClick={(id) => navigate(`/leads/${id}${selectedDepartmentId ? `?departmentId=${selectedDepartmentId}` : ''}`)}
+            onLeadClick={(id) => window.open(`/leads/${id}${selectedDepartmentId ? `?departmentId=${selectedDepartmentId}` : ''}`, '_blank', 'noopener,noreferrer')}
             onCommentClick={canCreateLead ? openCommentPopup : undefined}
             onCopyPhone={() => toast.success('Телефон скопирован')}
             onCopyEmail={() => toast.success('Email скопирован')}
@@ -979,6 +1008,8 @@ const LeadsPage: React.FC = () => {
         leadTagId={leadTagId}
         onLeadTagIdChange={setLeadTagId}
         leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+        closerId={leadCloserId}
+        onCloserIdChange={setLeadCloserId}
         assignedTo={leadAssignedTo}
         onAssignedToChange={setLeadAssignedTo}
         statuses={statuses}
@@ -1019,8 +1050,8 @@ const LeadsPage: React.FC = () => {
         leadTagId={bulkEditLeadTagId}
         onLeadTagIdChange={setBulkEditLeadTagId}
         leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
-        changeAssignees={bulkEditChangeAssignees}
-        onChangeAssigneesChange={setBulkEditChangeAssignees}
+        closerId={bulkEditCloserId}
+        onCloserIdChange={setBulkEditCloserId}
         assignedTo={bulkEditAssignedToSafe}
         onAssignedToChange={setBulkEditAssignedTo}
         statuses={statuses}

@@ -11,7 +11,6 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Checkbox,
   Typography,
 } from '@mui/material'
 import { formFieldSxTall as formFieldSx } from '@/theme/formStyles'
@@ -29,8 +28,8 @@ export interface BulkEditDialogProps {
   leadTagId: string
   onLeadTagIdChange: (v: string) => void
   leadTagOptions: { id: string; name: string; color: string }[]
-  changeAssignees: boolean
-  onChangeAssigneesChange: (v: boolean) => void
+  closerId: string
+  onCloserIdChange: (v: string) => void
   assignedTo: string[]
   onAssignedToChange: (v: string[]) => void
   statuses: StatusItem[]
@@ -49,8 +48,8 @@ const BulkEditDialog: React.FC<BulkEditDialogProps> = ({
   leadTagId,
   onLeadTagIdChange,
   leadTagOptions,
-  changeAssignees,
-  onChangeAssigneesChange,
+  closerId,
+  onCloserIdChange,
   assignedTo,
   onAssignedToChange,
   statuses,
@@ -129,45 +128,73 @@ const BulkEditDialog: React.FC<BulkEditDialogProps> = ({
           </MenuItem>
         ))}
       </TextField>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Checkbox
-          checked={changeAssignees}
-          onChange={(e) => onChangeAssigneesChange(e.target.checked)}
-          sx={{ color: 'rgba(255,255,255,0.6)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-        />
-        <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>Изменить исполнителей</Typography>
-      </Box>
-      {changeAssignees && (
-        <FormControl fullWidth sx={{ mb: 2, ...formFieldSx }}>
-          <InputLabel id="bulk-edit-assignees-label" shrink>Исполнители</InputLabel>
-          <Select
-            labelId="bulk-edit-assignees-label"
-            label="Исполнители"
-            multiple
-            value={assignedTo}
-            onChange={(e) => {
-              const v = e.target.value
-              const next = Array.isArray(v) ? v : (v === undefined || v === null ? [] : [String(v)])
-              onAssignedToChange(next)
-            }}
-            renderValue={(selected) => {
-              const arr = Array.isArray(selected) ? selected : []
-              if (!arr.length) return '— Никого'
-              return arr.map((id) => assigneeNameMap[id] || id).join(', ')
-            }}
-            variant="outlined"
-            sx={{ color: 'rgba(255,255,255,0.95)' }}
-          >
-            {assigneeOptions.map((o) => (
-              <MenuItem key={o.id} value={o.id}>
-                {o.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )}
+      <TextField
+        select
+        fullWidth
+        label="Установить ответственного (клоузера)"
+        value={closerId === '' ? '__none__' : closerId}
+        onChange={(e) => onCloserIdChange(e.target.value === '__none__' ? '' : e.target.value)}
+        InputLabelProps={{ shrink: true }}
+        sx={{ mb: 2, ...formFieldSx }}
+        SelectProps={{
+          sx: { color: 'rgba(255,255,255,0.95)' },
+          renderValue: (v: unknown) => {
+            if (!v || v === '__none__') return '— Не менять'
+            if (v === ' ') return '— Сбросить'
+            const o = assigneeOptions.find((opt) => opt.id === v)
+            return o ? o.label : String(v)
+          },
+        }}
+      >
+        <MenuItem value="__none__">— Не менять</MenuItem>
+        <MenuItem value=" ">— Сбросить</MenuItem>
+        {assigneeOptions.map((o) => (
+          <MenuItem key={o.id} value={o.id}>
+            {o.label}
+          </MenuItem>
+        ))}
+      </TextField>
+      <FormControl fullWidth sx={{ mb: 2, ...formFieldSx }}>
+        <InputLabel id="bulk-edit-assignees-label" shrink>Исполнители</InputLabel>
+        <Select
+          labelId="bulk-edit-assignees-label"
+          label="Исполнители"
+          multiple
+          value={assignedTo}
+          onChange={(e) => {
+            const v = e.target.value
+            const next = Array.isArray(v) ? v : (v === undefined || v === null ? [] : [String(v)])
+            if (next.includes('__clear__')) {
+              onAssignedToChange([])
+              return
+            }
+            if (next.includes('__none__')) {
+              onAssignedToChange(['__none__'])
+              return
+            }
+            const filtered = next.filter((id) => id !== '__none__' && id !== '__clear__')
+            onAssignedToChange(filtered)
+          }}
+          renderValue={(selected) => {
+            const arr = Array.isArray(selected) ? selected : []
+            if (arr.length === 0) return '— Сбросить'
+            if (arr.length === 1 && arr[0] === '__none__') return '— Не менять'
+            return arr.map((id) => assigneeNameMap[id] || id).join(', ')
+          }}
+          variant="outlined"
+          sx={{ color: 'rgba(255,255,255,0.95)' }}
+        >
+          <MenuItem value="__none__">— Не менять</MenuItem>
+          <MenuItem value="__clear__">— Сбросить</MenuItem>
+          {assigneeOptions.map((o) => (
+            <MenuItem key={o.id} value={o.id}>
+              {o.label}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-        Статус: «Не менять» — не трогать; «Сбросить» — убрать статус. Источник: тег откуда пришёл лид. Исполнители: если включено и пусто — снять назначение.
+        Статус: «Не менять» — не трогать; «Сбросить» — убрать статус. Источник: тег откуда пришёл лид. Исполнители: «Не менять» — не трогать; «Сбросить» — снять назначение; выберите пользователей — назначить.
       </Typography>
     </DialogContent>
     <DialogActions sx={{ px: 3, pb: 2 }}>

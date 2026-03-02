@@ -35,6 +35,8 @@ export interface LeadEditDialogProps {
   onStatusIdChange: (v: string) => void
   assignedTo: string[]
   onAssignedToChange: (v: string[]) => void
+  closerId: string
+  onCloserIdChange: (v: string) => void
   statuses: StatusItem[]
   assigneeOptions: { id: string; label: string }[]
   assigneeNameMap: Record<string, string>
@@ -66,6 +68,8 @@ const LeadEditDialog: React.FC<LeadEditDialogProps> = ({
   onStatusIdChange,
   assignedTo,
   onAssignedToChange,
+  closerId,
+  onCloserIdChange,
   statuses,
   assigneeOptions,
   assigneeNameMap,
@@ -125,6 +129,23 @@ const LeadEditDialog: React.FC<LeadEditDialogProps> = ({
               ))}
             </TextField>
           ))}
+        {assigneeOptions.length > 0 && (
+          <TextField
+            select
+            fullWidth
+            label="Ответственный (клоузер)"
+            value={closerId}
+            onChange={(e) => onCloserIdChange(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ mb: 2, ...formFieldSx }}
+            SelectProps={{ displayEmpty: true, sx: { color: 'rgba(255,255,255,0.95)' } }}
+          >
+            <MenuItem value="">— Не выбран</MenuItem>
+            {assigneeOptions.map((o) => (
+              <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
+            ))}
+          </TextField>
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={saving} sx={{ color: 'rgba(255,255,255,0.7)' }}>Отмена</Button>

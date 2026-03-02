@@ -64,6 +64,7 @@ export interface LeadsTableProps {
   onSortUpdatedAt: () => void
   onStatusChange: (leadId: string, statusId: string) => void
   onAssignedToChange: (leadId: string, assignedTo: string[]) => void
+  onCloserChange: (leadId: string, closerId: string | null) => void
   onEditLead: (lead: LeadItem) => void
   onDeleteLead: (leadId: string) => void
   updatingLeadId: string | null
@@ -101,6 +102,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   onSortUpdatedAt,
   onStatusChange,
   onAssignedToChange,
+  onCloserChange,
   onEditLead,
   onDeleteLead,
   updatingLeadId,
@@ -109,7 +111,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   onCopyPhone,
   onCopyEmail,
 }) => {
-  const colCount = 10 + (canBulkEdit ? 1 : 0) + (canCreateLead ? 1 : 0)
+  const colCount = 11 + (canBulkEdit ? 1 : 0) + (canCreateLead ? 1 : 0)
   const COMMENT_PREVIEW_LEN = 40
 
   return (
@@ -144,6 +146,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
               <TableCell sx={headerCellSx}>Email</TableCell>
               <TableCell sx={headerCellSx}>Статус</TableCell>
               <TableCell sx={headerCellSx}>Обрабатывает</TableCell>
+              <TableCell sx={headerCellSx}>Клоузер</TableCell>
               <TableCell sx={headerCellSx}>Источник</TableCell>
               <TableCell sx={headerCellSx}>Комментарий</TableCell>
               <TableCell sx={headerCellSx}>Создан</TableCell>
@@ -213,7 +216,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                   </TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>{lead.lastName || '—'}</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
                       <CopyableText value={(lead.phone || lead.phone2 || '').trim()} onCopy={onCopyPhone} />
                       {(() => {
                         const info = getPhoneCountryInfo((lead.phone || lead.phone2 || '').trim())
@@ -307,6 +310,31 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                     ) : lead.assignedTo?.length
                       ? (lead.assignedTo.map((id) => assigneeNameMap[id]).filter(Boolean).join(', ') || '—')
                       : '—'}
+                  </TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
+                    {canCreateLead ? (
+                      <Select
+                        size="small"
+                        value={lead.closerId ?? ''}
+                        onChange={(e) => onCloserChange(lead._id, e.target.value ? (e.target.value as string) : null)}
+                        disabled={updatingLeadId === lead._id}
+                        displayEmpty
+                        sx={{
+                          minWidth: 120,
+                          color: 'rgba(255,255,255,0.95)',
+                          '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                          '& .MuiSelect-select': { py: 0.5 },
+                        }}
+                        renderValue={(v: unknown) => (v ? (assigneeNameMap[v as string] || (v as string)) : '— Не выбран')}
+                      >
+                        <MenuItem value="">— Не выбран</MenuItem>
+                        {assigneeOptions.map((o) => (
+                          <MenuItem key={o.id} value={o.id}>
+                            {o.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    ) : lead.closerId ? (assigneeNameMap[lead.closerId] || lead.closerId) : '—'}
                   </TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                     {canCreateLead ? (

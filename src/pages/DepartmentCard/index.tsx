@@ -112,7 +112,10 @@ const DepartmentCardPage: React.FC = () => {
     id && department?.managerId && currentUser?.userId && String(department.managerId) === String(currentUser.userId),
   )
   const canManage = currentUser?.role === 'super' || isManagerOfThisDept
-  const canAssignEmployees = currentUser?.role === 'super' || currentUser?.role === 'admin'
+  const canAssignEmployees =
+    currentUser?.role === 'super' ||
+    currentUser?.role === 'admin' ||
+    (currentUser?.role === 'manager' && isManagerOfThisDept)
   const canShowEmployeeActions = canAssignEmployees || isManagerOfThisDept
   const canManageStatuses = currentUser?.role === 'super' || isManagerOfThisDept
   const canManageSites = canManageStatuses

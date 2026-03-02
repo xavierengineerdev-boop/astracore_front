@@ -77,6 +77,7 @@ const LeadCardPage: React.FC = () => {
   const [editEmail2, setEditEmail2] = useState('')
   const [editStatusId, setEditStatusId] = useState('')
   const [editAssignedTo, setEditAssignedTo] = useState<string[]>([])
+  const [editCloserId, setEditCloserId] = useState('')
 
   const [notes, setNotes] = useState<LeadNoteItem[]>([])
   const [history, setHistory] = useState<LeadHistoryItem[]>([])
@@ -358,6 +359,7 @@ const LeadCardPage: React.FC = () => {
     setEditEmail2(lead.email2 ?? '')
     setEditStatusId(lead.statusId ?? '')
     setEditAssignedTo(lead.assignedTo ?? [])
+    setEditCloserId(lead.closerId ?? '')
     setEditing(true)
   }
 
@@ -480,6 +482,7 @@ const LeadCardPage: React.FC = () => {
         email2: editEmail2.trim() || undefined,
         statusId: editStatusId || undefined,
         assignedTo: editAssignedTo,
+        closerId: editCloserId || null,
       }
       if (!isEmployee) {
         payload.phone = editPhone.trim() || undefined
@@ -530,6 +533,7 @@ const LeadCardPage: React.FC = () => {
 
   const statusItem = statuses.find((s) => s._id === lead.statusId)
   const assignedNames = (lead.assignedTo ?? []).map((id) => assigneeNameMap[id] || id).filter(Boolean).join(', ') || '—'
+  const closerName = lead.closerId ? (assigneeNameMap[lead.closerId] || lead.closerId) : '—'
 
   return (
     <Box sx={{ color: 'rgba(255,255,255,0.9)' }}>
@@ -560,6 +564,7 @@ const LeadCardPage: React.FC = () => {
           departmentName={department?.name ?? null}
           statusItem={statusItem}
           assignedNames={assignedNames}
+          closerName={closerName}
           onCopyPhone={() => toast.success('Телефон скопирован')}
           onCopyEmail={() => toast.success('Email скопирован')}
           onCopyPhone2={() => toast.success('Телефон 2 скопирован')}
@@ -650,6 +655,8 @@ const LeadCardPage: React.FC = () => {
         onStatusIdChange={setEditStatusId}
         assignedTo={editAssignedTo}
         onAssignedToChange={setEditAssignedTo}
+        closerId={editCloserId}
+        onCloserIdChange={setEditCloserId}
         statuses={statuses}
         assigneeOptions={assigneeOptions}
         assigneeNameMap={assigneeNameMap}
