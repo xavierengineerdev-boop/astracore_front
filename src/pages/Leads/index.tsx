@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Box, Typography, TextField, MenuItem, Button, CircularProgress, InputAdornment } from '@mui/material'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import UploadIcon from '@mui/icons-material/Upload'
@@ -55,7 +55,6 @@ function mergeSearchParams(
 
 const LeadsPage: React.FC = () => {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   // Сотрудник видит только свои лиды; руководитель, админ, супер — «Неназначенные» / «Все лиды отдела» / «Мои»
