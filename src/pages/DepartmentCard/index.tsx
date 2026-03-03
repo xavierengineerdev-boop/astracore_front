@@ -142,6 +142,7 @@ const DepartmentCardPage: React.FC = () => {
   const [siteDeleteId, setSiteDeleteId] = useState<string | null>(null)
   const [siteDeleting, setSiteDeleting] = useState(false)
   const [createdSiteToken, setCreatedSiteToken] = useState<string | null>(null)
+  const [siteLeadTagId, setSiteLeadTagId] = useState('')
 
   const [leadTags, setLeadTags] = useState<LeadTagItem[]>([])
   const [leadTagLoading, setLeadTagLoading] = useState(false)
@@ -501,6 +502,7 @@ const DepartmentCardPage: React.FC = () => {
     setSiteUrl('')
     setSiteDescription('')
     setCreatedSiteToken(null)
+    setSiteLeadTagId('')
     setSiteFormOpen(true)
   }
 
@@ -514,6 +516,7 @@ const DepartmentCardPage: React.FC = () => {
         url: siteUrl.trim(),
         description: siteDescription.trim() || undefined,
         departmentId: id,
+        leadTagId: siteLeadTagId.trim() || undefined,
       })
       setCreatedSiteToken(created.token)
       await refetchSites()
@@ -1149,6 +1152,7 @@ const DepartmentCardPage: React.FC = () => {
                 <TableRow>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>URL</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.04)' }}>Описание</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 100, bgcolor: 'rgba(255,255,255,0.04)' }}>Тег источника</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 140, bgcolor: 'rgba(255,255,255,0.04)' }}>Токен</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.6)', minWidth: 120, bgcolor: 'rgba(255,255,255,0.04)' }}>Скрипт</TableCell>
                   {canManageSites && (
@@ -1159,13 +1163,13 @@ const DepartmentCardPage: React.FC = () => {
               <TableBody>
                 {siteLoading ? (
                   <TableRow>
-                    <TableCell colSpan={canManageSites ? 5 : 4} sx={{ py: 2, textAlign: 'center' }}>
+                    <TableCell colSpan={canManageSites ? 6 : 5} sx={{ py: 2, textAlign: 'center' }}>
                       <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
                     </TableCell>
                   </TableRow>
                 ) : sites.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManageSites ? 5 : 4} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
+                    <TableCell colSpan={canManageSites ? 6 : 5} sx={{ color: 'rgba(255,255,255,0.5)', py: 2, textAlign: 'center' }}>
                       {canManageSites ? 'Нет сайтов. Нажмите «Добавить сайт» и передайте токен на сайт.' : 'Нет сайтов.'}
                     </TableCell>
                   </TableRow>
@@ -1176,6 +1180,9 @@ const DepartmentCardPage: React.FC = () => {
                         <Typography noWrap sx={{ maxWidth: 180 }}>{site.url}</Typography>
                       </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{site.description || '—'}</TableCell>
+                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                        {site.leadTagId ? (leadTags.find((t) => t._id === site.leadTagId)?.name ?? site.leadTagId) : '—'}
+                      </TableCell>
                       <TableCell sx={{ py: 0 }}>
                         {canManageSites ? (
                           <Button
@@ -1572,6 +1579,21 @@ const DepartmentCardPage: React.FC = () => {
                   InputLabelProps={{ shrink: true }}
                   sx={{ mb: 2, ...formFieldSx }}
                 />
+                <TextField
+                  select
+                  label="Тег источника лида"
+                  value={siteLeadTagId}
+                  onChange={(e) => setSiteLeadTagId(e.target.value)}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ mb: 2, ...formFieldSx }}
+                  SelectProps={{ displayEmpty: true, renderValue: (v) => (v ? (leadTags.find((t) => t._id === v)?.name ?? v) : '— Не выбран') }}
+                >
+                  <MenuItem value="">— Не выбран</MenuItem>
+                  {leadTags.map((t) => (
+                    <MenuItem key={t._id} value={t._id}>{t.name}</MenuItem>
+                  ))}
+                </TextField>
               </>
             )}
           </DialogContent>

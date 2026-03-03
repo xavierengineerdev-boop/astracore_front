@@ -19,6 +19,8 @@ export type SiteItem = {
   description: string
   token: string
   departmentId: string
+  /** ID тега источника — лиды с этого сайта получают этот тег */
+  leadTagId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -32,6 +34,7 @@ export async function createSite(data: {
   url: string
   description?: string
   departmentId: string
+  leadTagId?: string | null
 }): Promise<SiteItem> {
   const res = await authenticatedFetch(`${API_BASE}/sites`, {
     method: 'POST',
@@ -42,7 +45,7 @@ export async function createSite(data: {
 
 export async function updateSite(
   id: string,
-  data: { url?: string; description?: string },
+  data: { url?: string; description?: string; leadTagId?: string | null },
 ): Promise<SiteItem> {
   const res = await authenticatedFetch(`${API_BASE}/sites/${id}`, {
     method: 'PATCH',
