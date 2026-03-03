@@ -1587,7 +1587,11 @@ const DepartmentCardPage: React.FC = () => {
                   fullWidth
                   InputLabelProps={{ shrink: true }}
                   sx={{ mb: 2, ...formFieldSx }}
-                  SelectProps={{ displayEmpty: true, renderValue: (v) => (v ? (leadTags.find((t) => t._id === v)?.name ?? v) : '— Не выбран') }}
+                  SelectProps={{
+                    displayEmpty: true,
+                    renderValue: (v: unknown) =>
+                      v ? (leadTags.find((t) => t._id === v)?.name ?? String(v)) : '— Не выбран',
+                  }}
                 >
                   <MenuItem value="">— Не выбран</MenuItem>
                   {leadTags.map((t) => (
