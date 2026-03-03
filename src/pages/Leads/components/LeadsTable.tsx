@@ -22,6 +22,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import ClearIcon from '@mui/icons-material/Clear'
 import PhoneIcon from '@mui/icons-material/Phone'
 import CopyableText from '@/components/CopyableText'
 import { getPhoneCountryInfo } from '@/utils/phoneCountry'
@@ -63,6 +64,7 @@ export interface LeadsTableProps {
   sortBy: string
   sortOrder: 'asc' | 'desc'
   onSortUpdatedAt: () => void
+  onSortReset?: () => void
   onStatusChange: (leadId: string, statusId: string) => void
   onAssignedToChange: (leadId: string, assignedTo: string[]) => void
   onCloserChange: (leadId: string, closerId: string | null) => void
@@ -101,6 +103,7 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   sortBy,
   sortOrder,
   onSortUpdatedAt,
+  onSortReset,
   onStatusChange,
   onAssignedToChange,
   onCloserChange,
@@ -151,33 +154,46 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
               <TableCell sx={headerCellSx}>Источник</TableCell>
               <TableCell sx={headerCellSx}>Комментарий</TableCell>
               <TableCell sx={headerCellSx}>Создан</TableCell>
-              <TableCell sx={{ ...headerCellSx, p: 0 }}>
-                <Tooltip title={sortBy === 'updatedAt' ? (sortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
-                  <Button
-                    size="small"
-                    endIcon={
-                      sortBy === 'updatedAt' ? (
-                        sortOrder === 'desc' ? (
-                          <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+              <TableCell sx={{ ...headerCellSx, p: 0, whiteSpace: 'nowrap' }}>
+                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                  <Tooltip title={sortBy === 'updatedAt' ? (sortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
+                    <Button
+                      size="small"
+                      endIcon={
+                        sortBy === 'updatedAt' ? (
+                          sortOrder === 'desc' ? (
+                            <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                          ) : (
+                            <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                          )
                         ) : (
-                          <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                          <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
                         )
-                      ) : (
-                        <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
-                      )
-                    }
-                    onClick={onSortUpdatedAt}
-                    sx={{
-                      color: sortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
-                      textTransform: 'none',
-                      minWidth: 0,
-                      py: 0.5,
-                      px: 1,
-                    }}
-                  >
-                    Изменён
-                  </Button>
-                </Tooltip>
+                      }
+                      onClick={onSortUpdatedAt}
+                      sx={{
+                        color: sortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
+                        textTransform: 'none',
+                        minWidth: 0,
+                        py: 0.5,
+                        px: 1,
+                      }}
+                    >
+                      Изменён
+                    </Button>
+                  </Tooltip>
+                  {sortBy === 'updatedAt' && onSortReset && (
+                    <Tooltip title="Сбросить сортировку (по дате создания)">
+                      <IconButton
+                        size="small"
+                        onClick={onSortReset}
+                        sx={{ color: 'rgba(255,255,255,0.5)', p: 0.25, '&:hover': { color: 'rgba(255,255,255,0.9)' } }}
+                      >
+                        <ClearIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               </TableCell>
               {canCreateLead && (
                 <TableCell sx={{ ...headerCellSx, width: 56 }} align="right" />

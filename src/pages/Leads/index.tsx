@@ -966,9 +966,20 @@ const LeadsPage: React.FC = () => {
             sortBy={leadSortBy}
             sortOrder={leadSortOrder}
             onSortUpdatedAt={() => {
-              if (leadSortBy === 'updatedAt') setLeadSortOrder(leadSortOrder === 'desc' ? 'asc' : 'desc')
-              else { setLeadSortBy('updatedAt'); setLeadSortOrder('desc') }
-              setLeadPage(0)
+              const nextOrder = leadSortBy === 'updatedAt' && leadSortOrder === 'desc' ? 'asc' : 'desc'
+              const nextSortBy = 'updatedAt'
+              setSearchParams((prev) =>
+                mergeSearchParams(prev, {
+                  sortBy: nextSortBy,
+                  sortOrder: nextOrder === 'desc' ? undefined : nextOrder,
+                  page: 0,
+                }),
+              )
+            }}
+            onSortReset={() => {
+              setSearchParams((prev) =>
+                mergeSearchParams(prev, { sortBy: undefined, sortOrder: undefined, page: 0 }),
+              )
             }}
             onStatusChange={handleLeadStatusChange}
             onAssignedToChange={handleLeadAssignedToChange}
