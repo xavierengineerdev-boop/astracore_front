@@ -7,7 +7,6 @@ import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
-import { useCallWithSipCheck } from '@/hooks/useCallWithSipCheck'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
@@ -57,7 +56,6 @@ function mergeSearchParams(
 const LeadsPage: React.FC = () => {
   const { user } = useAuth()
   const toast = useToast()
-  const { callHref, SipErrorModal } = useCallWithSipCheck()
   const [searchParams, setSearchParams] = useSearchParams()
   // Сотрудник видит только свои лиды; руководитель, админ, супер — «Неназначенные» / «Все лиды отдела» / «Мои»
   const scopeParam = searchParams.get('scope')
@@ -982,9 +980,7 @@ const LeadsPage: React.FC = () => {
             onCommentClick={canCreateLead ? openCommentPopup : undefined}
             onCopyPhone={() => toast.success('Телефон скопирован')}
             onCopyEmail={() => toast.success('Email скопирован')}
-            onCallClick={callHref}
           />
-          {SipErrorModal}
         </>
       )}
 

@@ -18,8 +18,6 @@ export interface LeadInfoCardProps {
   onCopyEmail: () => void
   onCopyPhone2?: () => void
   onCopyEmail2?: () => void
-  /** При клике «Позвонить» — если передан, вызывается вместо перехода по href (для проверки SIP) */
-  onCallClick?: (telHref: string) => void
 }
 
 const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
@@ -32,7 +30,6 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
   onCopyEmail,
   onCopyPhone2,
   onCopyEmail2,
-  onCallClick,
 }) => {
   const fieldSx = { display: 'flex', flexDirection: 'column' as const, gap: 0.25 }
   return (
@@ -62,17 +59,10 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
                       <Box
                         component="a"
                         href={telHref}
-                        onClick={(e) => {
-                          if (onCallClick) {
-                            e.preventDefault()
-                            onCallClick(telHref)
-                          }
-                        }}
                         sx={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           color: 'rgba(167,139,250,0.95)',
-                          cursor: 'pointer',
                           '&:hover': { color: 'rgba(167,139,250,1)' },
                         }}
                       >
@@ -106,17 +96,10 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
                         <Box
                           component="a"
                           href={telHref}
-                          onClick={(e) => {
-                            if (onCallClick) {
-                              e.preventDefault()
-                              onCallClick(telHref)
-                            }
-                          }}
                           sx={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             color: 'rgba(167,139,250,0.95)',
-                            cursor: 'pointer',
                             '&:hover': { color: 'rgba(167,139,250,1)' },
                           }}
                         >

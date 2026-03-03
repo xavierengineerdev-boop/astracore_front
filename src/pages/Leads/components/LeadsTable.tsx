@@ -73,8 +73,6 @@ export interface LeadsTableProps {
   onCommentClick?: (lead: LeadItem) => void
   onCopyPhone: () => void
   onCopyEmail: () => void
-  /** При клике «Позвонить» — если передан, вызывается вместо перехода по href (для проверки SIP) */
-  onCallClick?: (telHref: string) => void
 }
 
 const LeadsTable: React.FC<LeadsTableProps> = ({
@@ -113,7 +111,6 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   onCommentClick,
   onCopyPhone,
   onCopyEmail,
-  onCallClick,
 }) => {
   const colCount = 11 + (canBulkEdit ? 1 : 0) + (canCreateLead ? 1 : 0)
   const COMMENT_PREVIEW_LEN = 40
@@ -246,18 +243,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                                 <Box
                                   component="a"
                                   href={telHref}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (onCallClick) {
-                                      e.preventDefault()
-                                      onCallClick(telHref)
-                                    }
-                                  }}
+                                  onClick={(e) => e.stopPropagation()}
                                   sx={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     color: 'rgba(167,139,250,0.9)',
-                                    cursor: 'pointer',
                                     '&:hover': { color: 'rgba(167,139,250,1)' },
                                   }}
                                 >

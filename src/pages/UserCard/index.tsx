@@ -39,7 +39,6 @@ import PhoneIcon from '@mui/icons-material/Phone'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import DonutSmallIcon from '@mui/icons-material/DonutSmall'
 import { useAuth } from '@/auth/AuthProvider'
-import { useCallWithSipCheck } from '@/hooks/useCallWithSipCheck'
 import { useToast } from '@/contexts/ToastContext'
 import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
 import { getUser, updateUser, deleteUser, getUserLeads, getUserLeadStats, type UserItem, type UserLeadStatsResult } from '@/api/users'
@@ -91,7 +90,6 @@ const UserCardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const toast = useToast()
-  const { callHref, SipErrorModal } = useCallWithSipCheck()
   const [user, setUser] = useState<UserItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -888,15 +886,10 @@ const UserCardPage: React.FC = () => {
                                     <Box
                                       component="a"
                                       href={telHref}
-                                      onClick={(e) => {
-                                        e.preventDefault()
-                                        callHref(telHref)
-                                      }}
                                       sx={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         color: 'rgba(167,139,250,0.9)',
-                                        cursor: 'pointer',
                                         '&:hover': { color: 'rgba(167,139,250,1)' },
                                       }}
                                     >
@@ -1258,8 +1251,6 @@ const UserCardPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {SipErrorModal}
     </Box>
   )
 }
