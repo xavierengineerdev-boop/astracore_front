@@ -22,6 +22,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
+import PhoneIcon from '@mui/icons-material/Phone'
 import CopyableText from '@/components/CopyableText'
 import { getPhoneCountryInfo } from '@/utils/phoneCountry'
 import { formatDateTime } from '../constants'
@@ -68,10 +69,12 @@ export interface LeadsTableProps {
   onEditLead: (lead: LeadItem) => void
   onDeleteLead: (leadId: string) => void
   updatingLeadId: string | null
-  onLeadClick: (leadId: string) => void
+  getLeadUrl: (leadId: string) => string
   onCommentClick?: (lead: LeadItem) => void
   onCopyPhone: () => void
   onCopyEmail: () => void
+  /** При клике «Позвонить» — если передан, вызывается вместо перехода по href (для проверки SIP) */
+  onCallClick?: (telHref: string) => void
 }
 
 const LeadsTable: React.FC<LeadsTableProps> = ({
@@ -106,10 +109,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   onEditLead,
   onDeleteLead,
   updatingLeadId,
-  onLeadClick,
+  getLeadUrl,
   onCommentClick,
   onCopyPhone,
   onCopyEmail,
+  onCallClick,
 }) => {
   const colCount = 11 + (canBulkEdit ? 1 : 0) + (canCreateLead ? 1 : 0)
   const COMMENT_PREVIEW_LEN = 40
@@ -208,19 +212,61 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                       />
                     </TableCell>
                   )}
-                  <TableCell
-                    sx={{ color: 'rgba(255,255,255,0.95)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, verticalAlign: 'middle', py: 1 }}
-                    onClick={() => onLeadClick(lead._id)}
-                  >
-                    {lead.name}
+                  <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
+                    <Box
+                      component="a"
+                      href={getLeadUrl(lead._id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{
+                        color: 'rgba(255,255,255,0.95)',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: 2,
+                        '&:hover': { color: 'rgba(167,139,250,0.95)' },
+                      }}
+                    >
+                      {lead.name}
+                    </Box>
                   </TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>{lead.lastName || '—'}</TableCell>
                   <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
                       <CopyableText value={(lead.phone || lead.phone2 || '').trim()} onCopy={onCopyPhone} />
                       {(() => {
-                        const info = getPhoneCountryInfo((lead.phone || lead.phone2 || '').trim())
-                        return info ? <span>{info.flag}</span> : null
+                        const ph = (lead.phone || lead.phone2 || '').trim()
+                        const info = getPhoneCountryInfo(ph)
+                        const telHref = ph ? `tel:${ph.replace(/\s/g, '')}` : null
+                        return (
+                          <>
+                            {info ? <span>{info.flag}</span> : null}
+                            {telHref && (
+                              <Tooltip title="Позвонить">
+                                <Box
+                                  component="a"
+                                  href={telHref}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (onCallClick) {
+                                      e.preventDefault()
+                                      onCallClick(telHref)
+                                    }
+                                  }}
+                                  sx={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    color: 'rgba(167,139,250,0.9)',
+                                    cursor: 'pointer',
+                                    '&:hover': { color: 'rgba(167,139,250,1)' },
+                                  }}
+                                >
+                                  <PhoneIcon sx={{ fontSize: 18 }} />
+                                </Box>
+                              </Tooltip>
+                            )}
+                          </>
+                        )
                       })()}
                     </Box>
                   </TableCell>

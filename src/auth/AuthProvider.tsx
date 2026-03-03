@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { login as apiLogin, me as apiMe, refresh as apiRefresh } from '@/api/auth'
 import { AUTH_LOGOUT_EVENT } from '@/api/client'
 
-export type User = { userId: string; email: string; role: string; firstName?: string; lastName?: string; lastLoginAt?: string; departmentId?: string }
+export type User = { userId: string; email: string; role: string; firstName?: string; lastName?: string; lastLoginAt?: string; departmentId?: string; sip?: string }
 
 interface AuthContextValue {
   user: User | null

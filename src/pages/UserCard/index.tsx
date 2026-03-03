@@ -35,9 +35,11 @@ import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import ContactPageIcon from '@mui/icons-material/ContactPage'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
+import PhoneIcon from '@mui/icons-material/Phone'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import DonutSmallIcon from '@mui/icons-material/DonutSmall'
 import { useAuth } from '@/auth/AuthProvider'
+import { useCallWithSipCheck } from '@/hooks/useCallWithSipCheck'
 import { useToast } from '@/contexts/ToastContext'
 import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
 import { getUser, updateUser, deleteUser, getUserLeads, getUserLeadStats, type UserItem, type UserLeadStatsResult } from '@/api/users'
@@ -89,6 +91,7 @@ const UserCardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const toast = useToast()
+  const { callHref, SipErrorModal } = useCallWithSipCheck()
   const [user, setUser] = useState<UserItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -102,6 +105,7 @@ const UserCardPage: React.FC = () => {
   const [editFirstName, setEditFirstName] = useState('')
   const [editLastName, setEditLastName] = useState('')
   const [editPhone, setEditPhone] = useState('')
+  const [editSip, setEditSip] = useState('')
   const [editIsActive, setEditIsActive] = useState(true)
   const [editDepartmentId, setEditDepartmentId] = useState('')
   const [departments, setDepartments] = useState<DepartmentItem[]>([])
@@ -356,6 +360,7 @@ const UserCardPage: React.FC = () => {
     setEditFirstName(user.firstName ?? '')
     setEditLastName(user.lastName ?? '')
     setEditPhone(user.phone ?? '')
+    setEditSip(user.sip ?? '')
     setEditIsActive(user.isActive !== false)
     setEditDepartmentId(user.departmentId ?? '')
     setEditing(true)
@@ -396,6 +401,7 @@ const UserCardPage: React.FC = () => {
         firstName: editFirstName.trim(),
         lastName: editLastName.trim(),
         phone: editPhone.trim(),
+        sip: editSip.trim(),
       }
       if (canEditRole) payload.role = editRole
       if (!isOwnProfile) payload.isActive = editIsActive
@@ -542,6 +548,41 @@ const UserCardPage: React.FC = () => {
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)' }}>
                     {departments.find((d) => String(d._id) === String(user.departmentId))?.name ?? '—'}
                   </Typography>
+                </Box>
+              )}
+              {(user.phone?.trim() || user.sip?.trim()) && (
+                <Box sx={{ px: 1.5, py: 0.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.08)' }}>
+                  <Typography variant="caption" color="rgba(255,255,255,0.5)">Телефон / SIP</Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.25 }}>
+                    {user.phone?.trim() && (
+                      <Box
+                        component="a"
+                        href={`tel:${user.phone.trim().replace(/^\+/, '')}`}
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: 'rgba(167,139,250,0.95)',
+                          textDecoration: 'underline',
+                          '&:hover': { color: 'rgba(167,139,250,1)' },
+                        }}
+                      >
+                        {user.phone.trim()}
+                      </Box>
+                    )}
+                    {user.sip?.trim() && (
+                      <Box
+                        component="a"
+                        href={user.sip.trim().toLowerCase().startsWith('sip:') ? user.sip.trim() : `sip:${user.sip.trim()}`}
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: 'rgba(167,139,250,0.95)',
+                          textDecoration: 'underline',
+                          '&:hover': { color: 'rgba(167,139,250,1)' },
+                        }}
+                      >
+                        {user.sip.trim()}
+                      </Box>
+                    )}
+                  </Box>
                 </Box>
               )}
             </Box>
@@ -838,7 +879,33 @@ const UserCardPage: React.FC = () => {
                           {(() => {
                             const ph = (lead.phone || lead.phone2 || '').trim()
                             const info = ph ? getPhoneCountryInfo(ph) : null
-                            return info ? <span>{info.flag}</span> : null
+                            const telHref = ph ? `tel:${ph.replace(/\s/g, '')}` : null
+                            return (
+                              <>
+                                {info ? <span>{info.flag}</span> : null}
+                                {telHref && (
+                                  <Tooltip title="Позвонить">
+                                    <Box
+                                      component="a"
+                                      href={telHref}
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        callHref(telHref)
+                                      }}
+                                      sx={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        color: 'rgba(167,139,250,0.9)',
+                                        cursor: 'pointer',
+                                        '&:hover': { color: 'rgba(167,139,250,1)' },
+                                      }}
+                                    >
+                                      <PhoneIcon sx={{ fontSize: 18 }} />
+                                    </Box>
+                                  </Tooltip>
+                                )}
+                              </>
+                            )
                           })()}
                         </Box>
                       </TableCell>
@@ -1048,6 +1115,15 @@ const UserCardPage: React.FC = () => {
               InputLabelProps={{ shrink: true }}
               sx={{ mb: 2, ...formFieldSx }}
             />
+            <TextField
+              label="SIP (телефония)"
+              value={editSip}
+              onChange={(e) => setEditSip(e.target.value)}
+              fullWidth
+              placeholder="sip:user@domain или номер"
+              InputLabelProps={{ shrink: true }}
+              sx={{ mb: 2, ...formFieldSx }}
+            />
             {canEditThisUser && !isOwnProfile ? (
               <TextField
                 select
@@ -1182,6 +1258,8 @@ const UserCardPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {SipErrorModal}
     </Box>
   )
 }

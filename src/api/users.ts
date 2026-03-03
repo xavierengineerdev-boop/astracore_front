@@ -20,6 +20,7 @@ export type UserItem = {
   firstName: string
   lastName: string
   phone: string
+  sip: string
   isActive: boolean
   lastLoginAt?: string
   departmentId?: string
@@ -44,6 +45,7 @@ export async function createUser(data: {
   firstName?: string
   lastName?: string
   phone?: string
+  sip?: string
   isActive?: boolean
   departmentId?: string
 }): Promise<UserItem> {
@@ -62,6 +64,7 @@ export async function updateUser(
     firstName?: string
     lastName?: string
     phone?: string
+    sip?: string
     isActive?: boolean
     departmentId?: string
   },

@@ -5,6 +5,7 @@ import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useAuth } from '@/auth/AuthProvider'
+import { useCallWithSipCheck } from '@/hooks/useCallWithSipCheck'
 import { useToast } from '@/contexts/ToastContext'
 import {
   getLead,
@@ -60,6 +61,7 @@ const LeadCardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const toast = useToast()
+  const { callHref, SipErrorModal } = useCallWithSipCheck()
   const [lead, setLead] = useState<LeadItem | null>(null)
   const [department, setDepartment] = useState<DepartmentDetail | null>(null)
   const [statuses, setStatuses] = useState<StatusItem[]>([])
@@ -569,7 +571,9 @@ const LeadCardPage: React.FC = () => {
           onCopyEmail={() => toast.success('Email скопирован')}
           onCopyPhone2={() => toast.success('Телефон 2 скопирован')}
           onCopyEmail2={() => toast.success('Email 2 скопирован')}
+          onCallClick={callHref}
         />
+          {SipErrorModal}
         <CommentsSection
           comments={comments}
           loading={loadingComments}

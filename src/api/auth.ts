@@ -37,5 +37,5 @@ export async function me(accessToken?: string) {
   const res = await fetch(`${API_BASE}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  return parseResponse<{ userId: string; email: string; role: string; firstName?: string; lastName?: string; lastLoginAt?: string; departmentId?: string }>(res)
+  return parseResponse<{ userId: string; email: string; role: string; firstName?: string; lastName?: string; lastLoginAt?: string; departmentId?: string; sip?: string }>(res)
 }

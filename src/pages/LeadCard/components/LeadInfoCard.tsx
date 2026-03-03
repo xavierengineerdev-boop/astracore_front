@@ -1,5 +1,6 @@
 import React from 'react'
-import { Box, Typography, Paper } from '@mui/material'
+import { Box, Typography, Paper, Tooltip } from '@mui/material'
+import PhoneIcon from '@mui/icons-material/Phone'
 import CopyableText from '@/components/CopyableText'
 import { formatDateTime } from '../constants'
 import { cardPaperSx } from '../constants'
@@ -17,6 +18,8 @@ export interface LeadInfoCardProps {
   onCopyEmail: () => void
   onCopyPhone2?: () => void
   onCopyEmail2?: () => void
+  /** При клике «Позвонить» — если передан, вызывается вместо перехода по href (для проверки SIP) */
+  onCallClick?: (telHref: string) => void
 }
 
 const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
@@ -29,6 +32,7 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
   onCopyEmail,
   onCopyPhone2,
   onCopyEmail2,
+  onCallClick,
 }) => {
   const fieldSx = { display: 'flex', flexDirection: 'column' as const, gap: 0.25 }
   return (
@@ -47,8 +51,37 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <CopyableText value={lead.phone ?? ''} onCopy={onCopyPhone} sx={{ color: 'rgba(255,255,255,0.9)' }} />
             {(() => {
+              const phone = (lead.phone ?? '').trim()
               const info = getPhoneCountryInfo(lead.phone ?? '')
-              return info ? <span>{info.flag}</span> : null
+              const telHref = phone ? `tel:${phone.replace(/\s/g, '')}` : null
+              return (
+                <>
+                  {info ? <span>{info.flag}</span> : null}
+                  {telHref && (
+                    <Tooltip title="Позвонить">
+                      <Box
+                        component="a"
+                        href={telHref}
+                        onClick={(e) => {
+                          if (onCallClick) {
+                            e.preventDefault()
+                            onCallClick(telHref)
+                          }
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'rgba(167,139,250,0.95)',
+                          cursor: 'pointer',
+                          '&:hover': { color: 'rgba(167,139,250,1)' },
+                        }}
+                      >
+                        <PhoneIcon sx={{ fontSize: 20 }} />
+                      </Box>
+                    </Tooltip>
+                  )}
+                </>
+              )
             })()}
           </Box>
         </Box>
@@ -62,8 +95,37 @@ const LeadInfoCard: React.FC<LeadInfoCardProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               <CopyableText value={(lead.phone2 ?? '').trim()} onCopy={onCopyPhone2} sx={{ color: 'rgba(255,255,255,0.9)' }} />
               {(() => {
-                const info = getPhoneCountryInfo((lead.phone2 ?? '').trim())
-                return info ? <span>{info.flag}</span> : null
+                const phone2 = (lead.phone2 ?? '').trim()
+                const info = getPhoneCountryInfo(phone2)
+                const telHref = phone2 ? `tel:${phone2.replace(/\s/g, '')}` : null
+                return (
+                  <>
+                    {info ? <span>{info.flag}</span> : null}
+                    {telHref && (
+                      <Tooltip title="Позвонить">
+                        <Box
+                          component="a"
+                          href={telHref}
+                          onClick={(e) => {
+                            if (onCallClick) {
+                              e.preventDefault()
+                              onCallClick(telHref)
+                            }
+                          }}
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            color: 'rgba(167,139,250,0.95)',
+                            cursor: 'pointer',
+                            '&:hover': { color: 'rgba(167,139,250,1)' },
+                          }}
+                        >
+                          <PhoneIcon sx={{ fontSize: 20 }} />
+                        </Box>
+                      </Tooltip>
+                    )}
+                  </>
+                )
               })()}
             </Box>
           </Box>
