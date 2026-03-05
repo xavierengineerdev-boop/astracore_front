@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Box, Typography, TextField, MenuItem, Button, CircularProgress, InputAdornment } from '@mui/material'
+import { Box, Typography, TextField, MenuItem, Button, CircularProgress, InputAdornment, IconButton, Tooltip } from '@mui/material'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import UploadIcon from '@mui/icons-material/Upload'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import ClearIcon from '@mui/icons-material/Clear'
 import SearchIcon from '@mui/icons-material/Search'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
@@ -76,7 +77,10 @@ const LeadsPage: React.FC = () => {
   const leadFilterName = searchParams.get('search') ?? ''
   const leadFilterPhone = searchParams.get('phone') ?? ''
   const leadFilterEmail = searchParams.get('email') ?? ''
-  const leadFilterStatusId = searchParams.get('statusId') ?? ''
+  const leadFilterStatusIds = useMemo(() => {
+    const raw = searchParams.get('statusIds') || searchParams.get('statusId') || ''
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  }, [searchParams])
   const leadFilterLeadTagId = searchParams.get('leadTagId') ?? ''
   const leadFilterAssignedTo = searchParams.get('assignedTo') ?? ''
   const leadFilterDateFrom = searchParams.get('dateFrom') ?? ''
@@ -90,7 +94,15 @@ const LeadsPage: React.FC = () => {
   const setLeadFilterName = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { search: v.trim() || undefined, page: 0 }))
   const setLeadFilterPhone = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { phone: v.trim() || undefined, page: 0 }))
   const setLeadFilterEmail = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { email: v.trim() || undefined, page: 0 }))
-  const setLeadFilterStatusId = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { statusId: v.trim() || undefined, page: 0 }))
+  const setLeadFilterStatusIds = (ids: string[]) =>
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev)
+      p.delete('statusId')
+      if (ids.length) p.set('statusIds', ids.join(','))
+      else p.delete('statusIds')
+      p.set('page', '0')
+      return p
+    })
   const setLeadFilterLeadTagId = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { leadTagId: v.trim() || undefined, page: 0 }))
   const setLeadFilterAssignedTo = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { assignedTo: v.trim() || undefined, page: 0 }))
   const setLeadFilterDateFrom = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { dateFrom: v.trim() || undefined, page: 0 }))
@@ -286,7 +298,7 @@ const LeadsPage: React.FC = () => {
       ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
       ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
       ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
-      ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+      ...(leadFilterStatusIds.length > 0 && { statusIds: leadFilterStatusIds }),
       ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
       ...(assignedToParam && { assignedTo: assignedToParam }),
       ...(unassignedOnly && { unassignedOnly: true }),
@@ -325,7 +337,7 @@ const LeadsPage: React.FC = () => {
     leadFilterName,
     leadFilterPhone,
     leadFilterEmail,
-    leadFilterStatusId,
+    leadFilterStatusIds,
     leadFilterLeadTagId,
     leadFilterAssignedTo,
     leadScope,
@@ -351,7 +363,7 @@ const LeadsPage: React.FC = () => {
         ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
         ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
         ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
-        ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+        ...(leadFilterStatusIds.length > 0 && { statusIds: leadFilterStatusIds }),
         ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
         ...(assignedToParam && { assignedTo: assignedToParam }),
         ...(unassignedOnly && { unassignedOnly: true }),
@@ -373,7 +385,7 @@ const LeadsPage: React.FC = () => {
   const resetLeadFilters = () => {
     setSearchParams((prev) => {
       const p = new URLSearchParams(prev)
-      ;['search', 'phone', 'email', 'statusId', 'leadTagId', 'assignedTo', 'dateFrom', 'dateTo', 'sortBy', 'sortOrder', 'page'].forEach((k) => p.delete(k))
+      ;['search', 'phone', 'email', 'statusId', 'statusIds', 'leadTagId', 'assignedTo', 'dateFrom', 'dateTo', 'sortBy', 'sortOrder', 'page'].forEach((k) => p.delete(k))
       return p
     })
   }
@@ -465,7 +477,7 @@ const LeadsPage: React.FC = () => {
         ...(leadFilterName.trim() && { search: leadFilterName.trim() }),
         ...(!leadFilterName.trim() && leadFilterPhone.trim() && { phone: leadFilterPhone.trim() }),
         ...(!leadFilterName.trim() && leadFilterEmail.trim() && { email: leadFilterEmail.trim() }),
-        ...(leadFilterStatusId && { statusId: leadFilterStatusId }),
+        ...(leadFilterStatusIds.length > 0 && { statusIds: leadFilterStatusIds }),
         ...(leadFilterLeadTagId && { leadTagId: leadFilterLeadTagId }),
         ...(assignedToParam && { assignedTo: assignedToParam }),
         ...(unassignedOnly && { unassignedOnly: true }),
@@ -859,37 +871,53 @@ const LeadsPage: React.FC = () => {
               >
                 Мои лиды
               </Button>
-              <Button
-                size="small"
-                startIcon={<FilterListIcon />}
-                onClick={() => setFilterDrawerOpen(true)}
-                sx={{ color: 'rgba(167,139,250,0.9)' }}
-              >
-                Фильтры
-              </Button>
-              {canCreateLead && (
-                <Button
+              <Tooltip title="Фильтры">
+                <IconButton
                   size="small"
-                  startIcon={<PersonAddIcon />}
-                  onClick={openLeadCreate}
+                  onClick={() => setFilterDrawerOpen(true)}
                   sx={{ color: 'rgba(167,139,250,0.9)' }}
+                  aria-label="Фильтры"
                 >
-                  Добавить лид
-                </Button>
+                  <FilterListIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Сбросить фильтры">
+                <IconButton
+                  size="small"
+                  onClick={resetLeadFilters}
+                  sx={{ color: 'rgba(255,255,255,0.7)' }}
+                  aria-label="Сбросить фильтры"
+                >
+                  <ClearIcon />
+                </IconButton>
+              </Tooltip>
+              {canCreateLead && (
+                <Tooltip title="Добавить лид">
+                  <IconButton
+                    size="small"
+                    onClick={openLeadCreate}
+                    sx={{ color: 'rgba(167,139,250,0.9)' }}
+                    aria-label="Добавить лид"
+                  >
+                    <PersonAddIcon />
+                  </IconButton>
+                </Tooltip>
               )}
               {canBulkCreateLeads && (
-                <Button
-                  size="small"
-                  startIcon={<UploadIcon />}
-                  onClick={() => {
-                    setBulkParsedItems(null)
-                    setBulkResult(null)
-                    setBulkDialogOpen(true)
-                  }}
-                  sx={{ color: 'rgba(167,139,250,0.9)' }}
-                >
-                  Массовое добавление
-                </Button>
+                <Tooltip title="Массовое добавление">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setBulkParsedItems(null)
+                      setBulkResult(null)
+                      setBulkDialogOpen(true)
+                    }}
+                    sx={{ color: 'rgba(167,139,250,0.9)' }}
+                    aria-label="Массовое добавление"
+                  >
+                    <UploadIcon />
+                  </IconButton>
+                </Tooltip>
               )}
             </Box>
           </Box>
@@ -903,8 +931,8 @@ const LeadsPage: React.FC = () => {
             onPhoneChange={setLeadFilterPhone}
             email={leadFilterEmail}
             onEmailChange={setLeadFilterEmail}
-            statusId={leadFilterStatusId}
-            onStatusIdChange={setLeadFilterStatusId}
+            statusIds={leadFilterStatusIds}
+            onStatusIdsChange={setLeadFilterStatusIds}
             leadTagId={leadFilterLeadTagId}
             onLeadTagIdChange={setLeadFilterLeadTagId}
             leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}

@@ -27,8 +27,8 @@ export interface LeadsFiltersDrawerProps {
   onPhoneChange: (v: string) => void
   email: string
   onEmailChange: (v: string) => void
-  statusId: string
-  onStatusIdChange: (v: string) => void
+  statusIds: string[]
+  onStatusIdsChange: (v: string[]) => void
   leadTagId: string
   onLeadTagIdChange: (v: string) => void
   leadTagOptions: { id: string; name: string; color: string }[]
@@ -56,8 +56,8 @@ const LeadsFiltersDrawer: React.FC<LeadsFiltersDrawerProps> = ({
   onPhoneChange,
   email,
   onEmailChange,
-  statusId,
-  onStatusIdChange,
+  statusIds,
+  onStatusIdsChange,
   leadTagId,
   onLeadTagIdChange,
   leadTagOptions,
@@ -104,14 +104,24 @@ const LeadsFiltersDrawer: React.FC<LeadsFiltersDrawerProps> = ({
           <TextField
             select
             label="Статус"
-            value={statusId}
-            onChange={(e) => onStatusIdChange(e.target.value)}
+            value={statusIds}
+            onChange={(e) => {
+              const v = e.target.value
+              onStatusIdsChange(typeof v === 'string' ? (v ? v.split(',') : []) : v)
+            }}
             InputLabelProps={{ shrink: true }}
             fullWidth
             sx={formFieldSx}
-            SelectProps={{ displayEmpty: true, sx: { color: 'rgba(255,255,255,0.95)' } }}
+            SelectProps={{
+              multiple: true,
+              displayEmpty: true,
+              renderValue: (sel) =>
+                Array.isArray(sel) && sel.length > 0
+                  ? statuses.filter((s) => sel.includes(s._id)).map((s) => s.name).join(', ')
+                  : 'Все статусы',
+              sx: { color: 'rgba(255,255,255,0.95)' },
+            }}
           >
-            <MenuItem value="">Все статусы</MenuItem>
             {statuses.map((s) => (
               <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
             ))}

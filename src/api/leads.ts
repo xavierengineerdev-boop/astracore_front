@@ -80,6 +80,7 @@ export async function getLeadsByDepartment(
     email?: string
     search?: string
     statusId?: string
+    statusIds?: string[]
     assignedTo?: string
     leadTagId?: string
     unassignedOnly?: boolean
@@ -99,7 +100,8 @@ export async function getLeadsByDepartment(
     if (params?.phone?.trim()) sp.set('phone', params.phone.trim())
     if (params?.email?.trim()) sp.set('email', params.email.trim())
   }
-  if (params?.statusId?.trim()) sp.set('statusId', params.statusId.trim())
+  if (params?.statusIds?.length) sp.set('statusIds', params.statusIds.join(','))
+  else if (params?.statusId?.trim()) sp.set('statusId', params.statusId.trim())
   if (params?.assignedTo?.trim()) sp.set('assignedTo', params.assignedTo.trim())
   if (params?.leadTagId?.trim()) sp.set('leadTagId', params.leadTagId.trim())
   if (params?.unassignedOnly === true) sp.set('unassignedOnly', 'true')
