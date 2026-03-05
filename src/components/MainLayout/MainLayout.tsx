@@ -296,7 +296,7 @@ const MainLayout: React.FC = () => {
             aria-label="Уведомления"
             size="small"
           >
-            <Badge badgeContent={notifCount} color="secondary">
+            <Badge badgeContent={notifCount} color="secondary" showZero>
               <NotificationsNoneIcon />
             </Badge>
           </IconButton>
@@ -338,7 +338,7 @@ const MainLayout: React.FC = () => {
           >
             <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <Typography variant="subtitle2" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
-                Напоминания
+                Напоминания {notifCount > 0 ? `(${notifCount})` : ''}
               </Typography>
             </Box>
             <Box sx={{ maxHeight: 360, overflowY: 'auto' }}>

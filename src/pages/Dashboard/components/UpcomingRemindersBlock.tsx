@@ -13,7 +13,7 @@ const UpcomingRemindersBlock: React.FC<UpcomingRemindersBlockProps> = ({ reminde
   <Paper sx={{ ...cardPaperSx, p: 2, minHeight: 240 }}>
     <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: 1 }}>
       <NotificationsActiveIcon sx={{ fontSize: 20, color: '#a78bfa' }} />
-      Ближайшие напоминания
+      Ближайшие напоминания {reminders.length > 0 ? `(${reminders.length})` : ''}
     </Typography>
     {reminders.length > 0 ? (
       <Box component="ul" sx={{ m: 0, pl: 2.5, listStyle: 'none' }}>
