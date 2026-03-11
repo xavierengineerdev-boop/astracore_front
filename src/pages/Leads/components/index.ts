@@ -1,6 +1,7 @@
 export { default as LeadsFiltersDrawer } from './LeadsFiltersDrawer'
 export { default as LeadsBulkBar } from './LeadsBulkBar'
 export { default as LeadsTable } from './LeadsTable'
+export { default as LeadsColumnSettingsDialog } from './LeadsColumnSettingsDialog'
 export { default as LeadFormDialog } from './LeadFormDialog'
 export { default as LeadDeleteDialog } from './LeadDeleteDialog'
 export { default as LeadCommentPopup } from './LeadCommentPopup'

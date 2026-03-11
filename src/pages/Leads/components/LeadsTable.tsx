@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Box,
   Typography,
@@ -18,24 +18,66 @@ import {
   Tooltip,
   Checkbox,
 } from '@mui/material'
+import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ClearIcon from '@mui/icons-material/Clear'
 import PhoneIcon from '@mui/icons-material/Phone'
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import CopyableText from '@/components/CopyableText'
+import { usePhoneRules } from '@/hooks/usePhoneRules'
 import { getPhoneCountryInfo } from '@/utils/phoneCountry'
+import { formatPhoneDisplay, getTelHref } from '@/utils/phone'
 import { formatDateTime } from '../constants'
 import { ROWS_PER_PAGE_OPTIONS } from '../constants'
 import type { LeadItem } from '@/api/leads'
 import type { StatusItem } from '@/api/statuses'
+import { getLeadsTableColumnWidths, saveLeadsTableColumnWidths, getLeadsTableColumnOrder, saveLeadsTableColumnOrder, type LeadsTableColumnWidths } from '@/api/users'
+
+const MIN_COLUMN_WIDTH = 200
+const CONTENT_EXTRA_PX = 20
+const MIN_COLUMN_WIDTH_WITH_PADDING = MIN_COLUMN_WIDTH + CONTENT_EXTRA_PX
+
+const LEADS_TABLE_COLUMN_CONFIG: { key: string; defaultWidth: number; minWidth: number }[] = [
+  { key: 'checkbox', defaultWidth: 56, minWidth: 56 },
+  { key: 'name', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'lastName', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'phone', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'email', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'status', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'assignedTo', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'closer', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'source', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'comment', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'createdAt', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'updatedAt', defaultWidth: MIN_COLUMN_WIDTH_WITH_PADDING, minWidth: MIN_COLUMN_WIDTH_WITH_PADDING },
+  { key: 'actions', defaultWidth: 88, minWidth: 88 },
+]
+
+const COLUMN_DIVIDER = '1px solid rgba(255,255,255,0.12)'
 
 const headerCellSx = {
   color: 'rgba(255,255,255,0.6)',
   bgcolor: 'rgba(255,255,255,0.04)',
   verticalAlign: 'middle',
-  py: 1,
+  py: 0.75,
+  px: 2,
+  borderRight: COLUMN_DIVIDER,
+} as const
+
+const bodyCellSx = {
+  verticalAlign: 'middle',
+  py: 0.5,
+  px: 2,
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+  minWidth: 0,
+  maxWidth: '100%',
+  borderRight: COLUMN_DIVIDER,
 } as const
 
 export interface LeadsTableProps {
@@ -75,6 +117,25 @@ export interface LeadsTableProps {
   onCommentClick?: (lead: LeadItem) => void
   onCopyPhone: () => void
   onCopyEmail: () => void
+  /** Видимость колонок: ключ — id колонки, значение — показывать (по умолчанию true при отсутствии ключа) */
+  columnVisibility?: Record<string, boolean>
+}
+
+/** Список колонок и подписи для настройки видимости (экспорт для диалога настроек) */
+export const LEADS_TABLE_COLUMN_LABELS: Record<string, string> = {
+  checkbox: 'Чекбокс',
+  name: 'Имя',
+  lastName: 'Фамилия',
+  phone: 'Телефон',
+  email: 'Email',
+  status: 'Статус',
+  assignedTo: 'Обрабатывает',
+  closer: 'Клоузер',
+  source: 'Источник',
+  comment: 'Комментарий',
+  createdAt: 'Создан',
+  updatedAt: 'Изменён',
+  actions: 'Действия',
 }
 
 const LeadsTable: React.FC<LeadsTableProps> = ({
@@ -114,12 +175,256 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
   onCommentClick,
   onCopyPhone,
   onCopyEmail,
+  columnVisibility,
 }) => {
-  const colCount = 11 + (canBulkEdit ? 1 : 0) + (canCreateLead ? 1 : 0)
+  const phoneRules = usePhoneRules()
   const COMMENT_PREVIEW_LEN = 40
+
+  const defaultColumnOrder = React.useMemo(() => LEADS_TABLE_COLUMN_CONFIG.map((c) => c.key), [])
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => defaultColumnOrder)
+  const orderSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    getLeadsTableColumnOrder().then((saved) => {
+      if (saved.length > 0) {
+        const known = new Set(LEADS_TABLE_COLUMN_CONFIG.map((c) => c.key))
+        const merged = [...saved.filter((k) => known.has(k))]
+        defaultColumnOrder.forEach((k) => { if (!merged.includes(k)) merged.push(k) })
+        setColumnOrder(merged)
+      }
+    }).catch(() => {})
+  }, [])
+
+  const visibleColumnKeys = React.useMemo(() => {
+    return columnOrder.filter(
+      (k) =>
+        (k !== 'checkbox' || canBulkEdit) &&
+        (k !== 'actions' || canCreateLead) &&
+        (columnVisibility == null || columnVisibility[k] !== false),
+    )
+  }, [columnOrder, canBulkEdit, canCreateLead, columnVisibility])
+
+  const defaultWidths = React.useMemo(() => {
+    const out: LeadsTableColumnWidths = {}
+    LEADS_TABLE_COLUMN_CONFIG.forEach((c) => { out[c.key] = c.defaultWidth })
+    return out
+  }, [])
+
+  const [columnWidths, setColumnWidths] = useState<LeadsTableColumnWidths>(() => ({}))
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [resizingCol, setResizingCol] = useState<string | null>(null)
+  const hasCustomWidths = Object.keys(columnWidths).length > 0
+
+  useEffect(() => {
+    getLeadsTableColumnWidths().then((saved) => {
+      if (Object.keys(saved).length > 0) {
+        setColumnWidths((prev) => {
+          const next = { ...defaultWidths, ...prev }
+          LEADS_TABLE_COLUMN_CONFIG.forEach((c) => {
+            const v = saved[c.key]
+            if (typeof v === 'number' && v >= c.minWidth) next[c.key] = v
+          })
+          return next
+        })
+      }
+    }).catch(() => {})
+  }, [])
+
+  const scheduleSave = useCallback((widths: LeadsTableColumnWidths) => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null
+      saveLeadsTableColumnWidths(widths).catch(() => {})
+    }, 500)
+  }, [])
+
+  useEffect(() => () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+    if (orderSaveTimeoutRef.current) clearTimeout(orderSaveTimeoutRef.current)
+  }, [])
+
+  const getWidth = useCallback((key: string) => {
+    const config = LEADS_TABLE_COLUMN_CONFIG.find((c) => c.key === key)
+    const w = columnWidths[key]
+    if (typeof w === 'number' && config && w >= config.minWidth) return w
+    return config?.defaultWidth ?? MIN_COLUMN_WIDTH
+  }, [columnWidths])
+
+  const resizeStartWRef = useRef<number>(0)
+  const handleResizeStart = useCallback((colKey: string, startX: number) => {
+    const config = LEADS_TABLE_COLUMN_CONFIG.find((c) => c.key === colKey)
+    if (!config) return
+    resizeStartWRef.current = getWidth(colKey)
+    setResizingCol(colKey)
+    const onMove = (e: MouseEvent) => {
+      const delta = e.clientX - startX
+      setColumnWidths((prev) => {
+        const next = { ...defaultWidths, ...prev }
+        const newW = Math.max(config.minWidth, resizeStartWRef.current + delta)
+        next[colKey] = newW
+        scheduleSave(next)
+        return next
+      })
+    }
+    const onUp = () => {
+      setResizingCol(null)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [getWidth, scheduleSave, defaultWidths])
+
+  const colCount = visibleColumnKeys.length
+
+  const getMinWidth = useCallback((key: string) => {
+    const config = LEADS_TABLE_COLUMN_CONFIG.find((c) => c.key === key)
+    return config?.minWidth ?? MIN_COLUMN_WIDTH
+  }, [])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  )
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = visibleColumnKeys.indexOf(String(active.id))
+    const newIndex = visibleColumnKeys.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    const newVisibleOrder = arrayMove(visibleColumnKeys, oldIndex, newIndex)
+    const visibleSet = new Set(newVisibleOrder)
+    let vi = 0
+    const newFullOrder = columnOrder.map((k) => {
+      if (visibleSet.has(k)) return newVisibleOrder[vi++]
+      return k
+    })
+    setColumnOrder(newFullOrder)
+    if (orderSaveTimeoutRef.current) clearTimeout(orderSaveTimeoutRef.current)
+    orderSaveTimeoutRef.current = setTimeout(() => {
+      saveLeadsTableColumnOrder(newFullOrder).catch(() => {})
+      orderSaveTimeoutRef.current = null
+    }, 300)
+  }, [columnOrder, visibleColumnKeys])
+
+  const ResizableHeaderCell: React.FC<{
+    colKey: string
+    children: React.ReactNode
+    sx?: Record<string, unknown>
+    noResize?: boolean
+    draggable?: boolean
+    sortableRef?: (node: HTMLElement | null) => void
+    sortableStyle?: React.CSSProperties
+    handleListeners?: Record<string, unknown>
+    handleAttributes?: Record<string, unknown>
+  }> = ({ colKey, children, sx = {}, noResize, draggable: isDraggable, sortableRef, sortableStyle, handleListeners, handleAttributes }) => {
+    const w = hasCustomWidths ? getWidth(colKey) : undefined
+    const minW = getMinWidth(colKey)
+    const isResizing = resizingCol === colKey
+    return (
+      <TableCell
+        component="th"
+        ref={sortableRef}
+        style={sortableStyle}
+        sx={{
+          ...headerCellSx,
+          ...sx,
+          ...(w != null ? { width: w, minWidth: w, maxWidth: w } : { minWidth: minW }),
+          position: 'relative',
+          boxSizing: 'border-box',
+          borderRight: isResizing ? '2px solid rgba(167,139,250,0.9)' : COLUMN_DIVIDER,
+        }}
+        title={isDraggable ? 'Перетащите за иконку для изменения порядка колонки' : undefined}
+      >
+        <Box sx={{ position: 'relative', width: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {isDraggable && (
+            <Box
+              component="div"
+              {...(handleListeners as object)}
+              {...(handleAttributes as object)}
+              sx={{
+                cursor: 'grab',
+                display: 'inline-flex',
+                alignItems: 'center',
+                color: 'rgba(255,255,255,0.5)',
+                p: 0.25,
+                mx: -0.25,
+                borderRadius: 1,
+                userSelect: 'none',
+                '&:active': { cursor: 'grabbing' },
+                '&:hover': { color: 'rgba(255,255,255,0.9)', bgcolor: 'rgba(255,255,255,0.08)' },
+                '& svg': { pointerEvents: 'none', display: 'block' },
+              }}
+              title="Перетащите для изменения порядка колонки"
+            >
+              <DragIndicatorIcon sx={{ fontSize: 20 }} />
+            </Box>
+          )}
+          {children}
+          {!noResize && (
+            <Box
+              component="span"
+              onMouseDown={(e) => { e.preventDefault(); handleResizeStart(colKey, e.clientX) }}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: 12,
+                height: '100%',
+                cursor: 'col-resize',
+                display: 'flex',
+                alignItems: 'stretch',
+                justifyContent: 'center',
+                '&::after': {
+                  content: '""',
+                  width: 3,
+                  flexShrink: 0,
+                  bgcolor: 'rgba(255,255,255,0.4)',
+                  transition: 'background-color 0.15s',
+                },
+                '&:hover': {
+                  '&::after': { bgcolor: 'rgba(167,139,250,0.9)' },
+                },
+                '&:active::after': { bgcolor: 'rgba(167,139,250,1)' },
+              }}
+              aria-label="Изменить ширину колонки"
+            />
+          )}
+        </Box>
+      </TableCell>
+    )
+  }
+
+  const SortableHeaderCell: React.FC<{
+    colKey: string
+    children: React.ReactNode
+    sx?: Record<string, unknown>
+    noResize?: boolean
+  }> = (props) => {
+    const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: props.colKey })
+    return (
+      <ResizableHeaderCell
+        {...props}
+        draggable
+        sortableRef={setNodeRef}
+        sortableStyle={{
+          transform: CSS.Transform.toString(transform),
+          transition,
+          opacity: isDragging ? 0.6 : 1,
+        }}
+        handleListeners={listeners as unknown as Record<string, unknown>}
+        handleAttributes={attributes as unknown as Record<string, unknown>}
+      />
+    )
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
       <TableContainer
         component={Paper}
         sx={{
@@ -131,73 +436,118 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
           overflow: 'auto',
         }}
       >
-        <Table size="small" stickyHeader>
+        <Table
+          size="small"
+          stickyHeader
+          sx={{
+            tableLayout: hasCustomWidths ? 'fixed' : 'auto',
+            ...(hasCustomWidths ? { minWidth: visibleColumnKeys.reduce((s, k) => s + getWidth(k), 0) } : {}),
+            '& th:last-of-type, & td:last-of-type': { borderRight: 'none' },
+          }}
+        >
+          <colgroup>
+            {visibleColumnKeys.map((key) =>
+              hasCustomWidths ? (
+                <col key={key} style={{ width: getWidth(key), minWidth: getWidth(key) }} />
+              ) : (
+                <col key={key} style={{ minWidth: getMinWidth(key) }} />
+              ),
+            )}
+          </colgroup>
           <TableHead>
             <TableRow>
-              {canBulkEdit && (
-                <TableCell padding="checkbox" sx={{ ...headerCellSx }}>
-                  <Checkbox
-                    indeterminate={someSelected && !allSelectedOnPage}
-                    checked={allSelectedOnPage}
-                    onChange={onToggleSelectAll}
-                    sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                  />
-                </TableCell>
-              )}
-              <TableCell sx={headerCellSx}>Имя</TableCell>
-              <TableCell sx={headerCellSx}>Фамилия</TableCell>
-              <TableCell sx={headerCellSx}>Телефон</TableCell>
-              <TableCell sx={headerCellSx}>Email</TableCell>
-              <TableCell sx={headerCellSx}>Статус</TableCell>
-              <TableCell sx={headerCellSx}>Обрабатывает</TableCell>
-              <TableCell sx={headerCellSx}>Клоузер</TableCell>
-              <TableCell sx={headerCellSx}>Источник</TableCell>
-              <TableCell sx={headerCellSx}>Комментарий</TableCell>
-              <TableCell sx={headerCellSx}>Создан</TableCell>
-              <TableCell sx={{ ...headerCellSx, p: 0, whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
-                  <Tooltip title={sortBy === 'updatedAt' ? (sortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
-                    <Button
-                      size="small"
-                      endIcon={
-                        sortBy === 'updatedAt' ? (
-                          sortOrder === 'desc' ? (
-                            <ArrowDownwardIcon sx={{ fontSize: 18 }} />
-                          ) : (
-                            <ArrowUpwardIcon sx={{ fontSize: 18 }} />
-                          )
-                        ) : (
-                          <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
-                        )
-                      }
-                      onClick={onSortUpdatedAt}
-                      sx={{
-                        color: sortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
-                        textTransform: 'none',
-                        minWidth: 0,
-                        py: 0.5,
-                        px: 1,
-                      }}
+              <SortableContext items={visibleColumnKeys} strategy={horizontalListSortingStrategy}>
+              {visibleColumnKeys.map((key) => {
+                const headerContent = (() => {
+                  if (key === 'checkbox') return (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <Checkbox
+                        indeterminate={someSelected && !allSelectedOnPage}
+                        checked={allSelectedOnPage}
+                        onChange={onToggleSelectAll}
+                        sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
+                      />
+                    </Box>
+                  )
+                  if (key === 'name') return 'Имя'
+                  if (key === 'lastName') return 'Фамилия'
+                  if (key === 'phone') return 'Телефон'
+                  if (key === 'email') return 'Email'
+                  if (key === 'status') return 'Статус'
+                  if (key === 'assignedTo') return 'Обрабатывает'
+                  if (key === 'closer') return 'Клоузер'
+                  if (key === 'source') return 'Источник'
+                  if (key === 'comment') return 'Комментарий'
+                  if (key === 'createdAt') return 'Создан'
+                  if (key === 'updatedAt') return (
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                      <Tooltip title={sortBy === 'updatedAt' ? (sortOrder === 'desc' ? 'Сначала новые (клик — по старым)' : 'Сначала старые (клик — по новым)') : 'Сортировка по дате изменения'}>
+                        <Button
+                          size="small"
+                          endIcon={
+                            sortBy === 'updatedAt' ? (
+                              sortOrder === 'desc' ? (
+                                <ArrowDownwardIcon sx={{ fontSize: 18 }} />
+                              ) : (
+                                <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                              )
+                            ) : (
+                              <ArrowDownwardIcon sx={{ fontSize: 18, opacity: 0.5 }} />
+                            )
+                          }
+                          onClick={onSortUpdatedAt}
+                          sx={{
+                            color: sortBy === 'updatedAt' ? 'rgba(167,139,250,0.95)' : 'rgba(255,255,255,0.6)',
+                            textTransform: 'none',
+                            minWidth: 0,
+                            py: 0.5,
+                            px: 1,
+                          }}
+                        >
+                          Изменён
+                        </Button>
+                      </Tooltip>
+                      {sortBy === 'updatedAt' && onSortReset && (
+                        <Tooltip title="Сбросить сортировку (по дате создания)">
+                          <IconButton
+                            size="small"
+                            onClick={onSortReset}
+                            sx={{ color: 'rgba(255,255,255,0.5)', p: 0.25, '&:hover': { color: 'rgba(255,255,255,0.9)' } }}
+                          >
+                            <ClearIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  )
+                  if (key === 'actions') return <span />
+                  return key
+                })()
+                if (key === 'checkbox' || key === 'actions') {
+                  return (
+                    <ResizableHeaderCell
+                      key={key}
+                      colKey={key}
+                      noResize
+                      sx={key === 'checkbox' ? { px: 2 } : {}}
+                      draggable={false}
                     >
-                      Изменён
-                    </Button>
-                  </Tooltip>
-                  {sortBy === 'updatedAt' && onSortReset && (
-                    <Tooltip title="Сбросить сортировку (по дате создания)">
-                      <IconButton
-                        size="small"
-                        onClick={onSortReset}
-                        sx={{ color: 'rgba(255,255,255,0.5)', p: 0.25, '&:hover': { color: 'rgba(255,255,255,0.9)' } }}
-                      >
-                        <ClearIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Box>
-              </TableCell>
-              {canCreateLead && (
-                <TableCell sx={{ ...headerCellSx, width: 56 }} align="right" />
-              )}
+                      {headerContent}
+                    </ResizableHeaderCell>
+                  )
+                }
+                return (
+                  <SortableHeaderCell
+                    key={key}
+                    colKey={key}
+                    noResize={false}
+                    sx={key === 'updatedAt' ? { p: 0, whiteSpace: 'nowrap' } : {}}
+                  >
+                    {headerContent}
+                  </SortableHeaderCell>
+                )
+              })}
+              </SortableContext>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -216,16 +566,18 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
             ) : (
               leads.map((lead) => (
                 <TableRow key={lead._id} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
-                  {canBulkEdit && (
-                    <TableCell padding="checkbox" sx={{ verticalAlign: 'middle', py: 1 }}>
-                      <Checkbox
-                        checked={selectedLeadIds.includes(lead._id)}
-                        onChange={() => onToggleSelectLead(lead._id)}
-                        sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
+                  {visibleColumnKeys.map((colKey) => {
+                    if (colKey === 'checkbox') return (
+                      <TableCell key={colKey} padding="checkbox" align="center" sx={bodyCellSx}>
+                        <Checkbox
+                          checked={selectedLeadIds.includes(lead._id)}
+                          onChange={() => onToggleSelectLead(lead._id)}
+                          sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
+                        />
+                      </TableCell>
+                    )
+                    if (colKey === 'name') return (
+                      <TableCell key={colKey} sx={bodyCellSx}>
                     <Box
                       component="a"
                       href={getLeadUrl(lead._id)}
@@ -233,6 +585,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       sx={{
+                        display: 'block',
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                         color: 'rgba(255,255,255,0.95)',
                         cursor: 'pointer',
                         textDecoration: 'underline',
@@ -241,16 +598,20 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                       }}
                     >
                       {lead.name}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>{lead.lastName || '—'}</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-                      <CopyableText value={(lead.phone || lead.phone2 || '').trim()} onCopy={onCopyPhone} />
+                        </Box>
+                      </TableCell>
+                    )
+                    if (colKey === 'lastName') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.lastName || '—'}</TableCell>
+                    )
+                    if (colKey === 'phone') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden' }}>
+                      <CopyableText value={formatPhoneDisplay(lead.phone || lead.phone2, phoneRules) || (lead.phone || lead.phone2 || '').trim()} onCopy={onCopyPhone} />
                       {(() => {
                         const ph = (lead.phone || lead.phone2 || '').trim()
                         const info = getPhoneCountryInfo(ph)
-                        const telHref = ph ? `tel:${ph.replace(/\s/g, '')}` : null
+                        const telHref = getTelHref(ph)
                         return (
                           <>
                             {info ? <span>{info.flag}</span> : null}
@@ -274,12 +635,16 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                           </>
                         )
                       })()}
-                    </Box>
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    <CopyableText value={(lead.email || lead.email2 || '').trim()} onCopy={onCopyEmail} />
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
+                        </Box>
+                      </TableCell>
+                    )
+                    if (colKey === 'email') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
+                        <CopyableText value={(lead.email || lead.email2 || '').trim()} onCopy={onCopyEmail} />
+                      </TableCell>
+                    )
+                    if (colKey === 'status') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
                     {canCreateLead ? (
                       <Select
                         size="small"
@@ -288,7 +653,9 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                         disabled={updatingLeadId === lead._id}
                         displayEmpty
                         sx={{
-                          minWidth: 140,
+                          minWidth: 0,
+                          maxWidth: '100%',
+                          width: '100%',
                           color: 'rgba(255,255,255,0.95)',
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
                           '& .MuiSelect-select': { py: 0.5 },
@@ -325,11 +692,13 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                         </Box>
                       )
                     })() : '—'}
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    {canCreateLead ? (
+                      </TableCell>
+                    )
+                    if (colKey === 'assignedTo') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
+                        {canCreateLead ? (
                       isEmployee ? (
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {lead.assignedTo?.includes(currentUserId ?? '') ? 'На мне' : (lead.assignedTo?.length ? (lead.assignedTo.map((id) => assigneeNameMap[id] || id).join(', ')) : '— Никого')}
                         </Typography>
                       ) : (
@@ -341,7 +710,9 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                           disabled={updatingLeadId === lead._id}
                           displayEmpty
                           sx={{
-                            minWidth: 140,
+                            minWidth: 0,
+                            maxWidth: '100%',
+                            width: '100%',
                             color: 'rgba(255,255,255,0.95)',
                             '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
                             '& .MuiSelect-select': { py: 0.5 },
@@ -362,9 +733,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                     ) : lead.assignedTo?.length
                       ? (lead.assignedTo.map((id) => assigneeNameMap[id]).filter(Boolean).join(', ') || '—')
                       : '—'}
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    {canCreateLead ? (
+                      </TableCell>
+                    )
+                    if (colKey === 'closer') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
+                        {canCreateLead ? (
                       <Select
                         size="small"
                         value={lead.closerId ?? ''}
@@ -372,7 +745,9 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                         disabled={updatingLeadId === lead._id}
                         displayEmpty
                         sx={{
-                          minWidth: 120,
+                          minWidth: 0,
+                          maxWidth: '100%',
+                          width: '100%',
                           color: 'rgba(255,255,255,0.95)',
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
                           '& .MuiSelect-select': { py: 0.5 },
@@ -387,9 +762,11 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                         ))}
                       </Select>
                     ) : lead.closerId ? (assigneeNameMap[lead.closerId] || lead.closerId) : '—'}
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle', py: 1 }}>
-                    {canCreateLead ? (
+                      </TableCell>
+                    )
+                    if (colKey === 'source') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.8)' }}>
+                        {canCreateLead ? (
                       <Select
                         size="small"
                         value={lead.leadTagId ?? ''}
@@ -397,7 +774,9 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                         disabled={updatingLeadId === lead._id}
                         displayEmpty
                         sx={{
-                          minWidth: 120,
+                          minWidth: 0,
+                          maxWidth: '100%',
+                          width: '100%',
                           color: 'rgba(255,255,255,0.95)',
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
                           '& .MuiSelect-select': { py: 0.5 },
@@ -432,48 +811,66 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                     ) : (
                       '—'
                     )}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      color: lead.comment ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
-                      verticalAlign: 'middle',
-                      py: 1,
-                      maxWidth: 180,
-                      cursor: onCommentClick ? 'pointer' : 'default',
-                      '&:hover': onCommentClick ? { textDecoration: 'underline', bgcolor: 'rgba(255,255,255,0.04)' } : {},
-                    }}
-                    onClick={(e) => {
-                      if (onCommentClick) {
-                        e.stopPropagation()
-                        onCommentClick(lead)
-                      }
-                    }}
-                  >
-                    {lead.comment?.trim() ? (
-                      lead.comment.length > COMMENT_PREVIEW_LEN ? (
-                        <Tooltip
-                          title={
-                            <Typography component="span" sx={{ whiteSpace: 'pre-wrap', display: 'block', maxWidth: 320 }}>
-                              {lead.comment}
-                            </Typography>
+                      </TableCell>
+                    )
+                    if (colKey === 'comment') return (
+                      <TableCell
+                        key={colKey}
+                        sx={{
+                          ...bodyCellSx,
+                          color: lead.comment ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                          cursor: onCommentClick ? 'pointer' : 'default',
+                          '&:hover': onCommentClick ? { textDecoration: 'underline', bgcolor: 'rgba(255,255,255,0.04)' } : {},
+                        }}
+                        onClick={(e) => {
+                          if (onCommentClick) {
+                            e.stopPropagation()
+                            onCommentClick(lead)
                           }
-                          placement="top-start"
-                          enterDelay={300}
-                        >
-                          <span>{lead.comment.slice(0, COMMENT_PREVIEW_LEN)}…</span>
-                        </Tooltip>
+                        }}
+                      >
+                    {(() => {
+                      const list =
+                        lead.comments && lead.comments.length > 0
+                          ? lead.comments
+                          : lead.lastComment
+                            ? [lead.lastComment]
+                            : (lead.comment ?? '').trim()
+                              ? [{ content: (lead.comment ?? '').trim(), createdAt: '' }]
+                              : []
+                      const lastOne = list.length > 0 ? list[list.length - 1] : null
+                      const text = lastOne ? lastOne.content.trim() : ''
+                      return text ? (
+                        text.length > COMMENT_PREVIEW_LEN ? (
+                          <Tooltip
+                            title={
+                              <Typography component="span" sx={{ whiteSpace: 'pre-wrap', display: 'block', maxWidth: 360 }}>
+                                {list.map((c, i) => (c.content.trim() ? `${i + 1}. ${c.content.trim()}` : null)).filter(Boolean).join('\n\n') || text}
+                              </Typography>
+                            }
+                            placement="top-start"
+                            enterDelay={300}
+                          >
+                            <Box component="span" sx={{ display: 'block', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text.slice(0, COMMENT_PREVIEW_LEN)}…</Box>
+                          </Tooltip>
+                        ) : (
+                          <Box component="span" sx={{ display: 'block', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</Box>
+                        )
                       ) : (
-                        lead.comment
+                        '—'
                       )
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.createdAt)}</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', verticalAlign: 'middle', py: 1 }}>{formatDateTime(lead.updatedAt)}</TableCell>
-                  {canCreateLead && (
-                    <TableCell align="right" sx={{ verticalAlign: 'middle', py: 1 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 0 }}>
+                    })()}
+                      </TableCell>
+                    )
+                    if (colKey === 'createdAt') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>{formatDateTime(lead.createdAt)}</TableCell>
+                    )
+                    if (colKey === 'updatedAt') return (
+                      <TableCell key={colKey} sx={{ ...bodyCellSx, color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>{formatDateTime(lead.updatedAt)}</TableCell>
+                    )
+                    if (colKey === 'actions') return (
+                      <TableCell key={colKey} align="right" sx={bodyCellSx}>
+                      <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                         <Tooltip title="Редактировать">
                           <IconButton size="small" onClick={() => onEditLead(lead)} sx={{ color: 'rgba(167,139,250,0.9)' }}>
                             <EditIcon fontSize="small" />
@@ -485,14 +882,17 @@ const LeadsTable: React.FC<LeadsTableProps> = ({
                           </IconButton>
                         </Tooltip>
                       </Box>
-                    </TableCell>
-                  )}
+                      </TableCell>
+                    )
+                    return null
+                  })}
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
+      </DndContext>
 
       <TablePagination
         component="div"

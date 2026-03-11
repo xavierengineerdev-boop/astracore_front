@@ -48,7 +48,9 @@ import { updateLead, bulkUpdateLeads } from '@/api/leads'
 import { formFieldSx } from '@/theme/formStyles'
 import LeadCommentPopup from '@/pages/Leads/components/LeadCommentPopup'
 import type { LeadItemWithMeta } from '@/api/users'
+import { usePhoneRules } from '@/hooks/usePhoneRules'
 import { getPhoneCountryInfo } from '@/utils/phoneCountry'
+import { formatPhoneDisplay, getTelHref } from '@/utils/phone'
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 
 const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6']
@@ -124,6 +126,7 @@ const UserCardPage: React.FC = () => {
   const [bulkReassignAssigneeId, setBulkReassignAssigneeId] = useState('')
   const [bulkReassignSaving, setBulkReassignSaving] = useState(false)
   const [departmentDetailForLeads, setDepartmentDetailForLeads] = useState<DepartmentDetail | null>(null)
+  const phoneRules = usePhoneRules()
   const creatableRoles = getCreatableRoles(currentUser?.role ?? '')
   const isOwnProfile = Boolean(id && currentUser?.userId && String(currentUser.userId) === String(id))
   const canAccess = creatableRoles.length > 0 || isOwnProfile
@@ -873,11 +876,11 @@ const UserCardPage: React.FC = () => {
                       </TableCell>
                       <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <span>{(lead.phone || lead.phone2 || '').trim() || '—'}</span>
+                          <span>{formatPhoneDisplay(lead.phone || lead.phone2, phoneRules) || (lead.phone || lead.phone2 || '').trim() || '—'}</span>
                           {(() => {
                             const ph = (lead.phone || lead.phone2 || '').trim()
                             const info = ph ? getPhoneCountryInfo(ph) : null
-                            const telHref = ph ? `tel:${ph.replace(/\s/g, '')}` : null
+                            const telHref = getTelHref(ph)
                             return (
                               <>
                                 {info ? <span>{info.flag}</span> : null}

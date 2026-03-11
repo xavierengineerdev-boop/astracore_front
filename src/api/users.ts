@@ -81,6 +81,71 @@ export async function deleteUser(id: string): Promise<void> {
   await parseResponse<{ message: string }>(res)
 }
 
+const SETTINGS_KEY_LEADS_TABLE_COLUMN_WIDTHS = 'leads_table_column_widths'
+export const SETTINGS_KEY_LEADS_TABLE_COLUMN_ORDER = 'leads_table_column_order'
+const SETTINGS_KEY_LEADS_TABLE_COLUMN_VISIBILITY = 'leads_table_column_visibility'
+
+export type LeadsTableColumnWidths = Record<string, number>
+export type LeadsTableColumnVisibility = Record<string, boolean>
+
+export async function getMySettings(): Promise<Record<string, unknown>> {
+  const res = await authenticatedFetch(`${API_BASE}/users/me/settings`)
+  return parseResponse<Record<string, unknown>>(res)
+}
+
+export async function updateMySetting(key: string, value: unknown): Promise<void> {
+  const res = await authenticatedFetch(`${API_BASE}/users/me/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ key, value }),
+  })
+  await parseResponse<{ ok: boolean }>(res)
+}
+
+export async function getLeadsTableColumnWidths(): Promise<LeadsTableColumnWidths> {
+  const settings = await getMySettings()
+  const raw = settings[SETTINGS_KEY_LEADS_TABLE_COLUMN_WIDTHS]
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'number' && v >= 80) out[k] = v
+    }
+    return out
+  }
+  return {}
+}
+
+export async function saveLeadsTableColumnWidths(widths: LeadsTableColumnWidths): Promise<void> {
+  await updateMySetting(SETTINGS_KEY_LEADS_TABLE_COLUMN_WIDTHS, widths)
+}
+
+export async function getLeadsTableColumnOrder(): Promise<string[]> {
+  const settings = await getMySettings()
+  const raw = settings[SETTINGS_KEY_LEADS_TABLE_COLUMN_ORDER]
+  if (Array.isArray(raw) && raw.every((x) => typeof x === 'string')) return raw as string[]
+  return []
+}
+
+export async function saveLeadsTableColumnOrder(order: string[]): Promise<void> {
+  await updateMySetting(SETTINGS_KEY_LEADS_TABLE_COLUMN_ORDER, order)
+}
+
+export async function getLeadsTableColumnVisibility(): Promise<LeadsTableColumnVisibility> {
+  const settings = await getMySettings()
+  const raw = settings[SETTINGS_KEY_LEADS_TABLE_COLUMN_VISIBILITY]
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, boolean> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'boolean') out[k] = v
+    }
+    return out
+  }
+  return {}
+}
+
+export async function saveLeadsTableColumnVisibility(visibility: LeadsTableColumnVisibility): Promise<void> {
+  await updateMySetting(SETTINGS_KEY_LEADS_TABLE_COLUMN_VISIBILITY, visibility)
+}
+
 export type LeadItemWithMeta = import('./leads').LeadItem & {
   statusName?: string
   departmentName?: string

@@ -36,6 +36,7 @@ import {
 } from '@/api/leads'
 import { getDepartment, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
+import { getLeadTagsByDepartment, type LeadTagItem } from '@/api/leadTags'
 import type { Dayjs } from 'dayjs'
 import {
   LeadInfoCard,
@@ -63,6 +64,7 @@ const LeadCardPage: React.FC = () => {
   const [lead, setLead] = useState<LeadItem | null>(null)
   const [department, setDepartment] = useState<DepartmentDetail | null>(null)
   const [statuses, setStatuses] = useState<StatusItem[]>([])
+  const [leadTags, setLeadTags] = useState<LeadTagItem[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -112,6 +114,7 @@ const LeadCardPage: React.FC = () => {
 
   const isEmployee = currentUser?.role === 'employee'
   const isManager = currentUser?.role === 'super' || currentUser?.role === 'admin' || currentUser?.role === 'manager'
+  const canEditLeadSource = currentUser?.role === 'super' || currentUser?.role === 'admin' || currentUser?.role === 'manager'
   const canEditLead = Boolean(
     currentUser &&
       (currentUser.role === 'super' ||
@@ -235,6 +238,18 @@ const LeadCardPage: React.FC = () => {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id, currentUser, navigate, toast])
+
+  useEffect(() => {
+    if (!lead?.departmentId) {
+      setLeadTags([])
+      return
+    }
+    let cancelled = false
+    getLeadTagsByDepartment(lead.departmentId)
+      .then((list) => { if (!cancelled) setLeadTags(list || []) })
+      .catch(() => { if (!cancelled) setLeadTags([]) })
+    return () => { cancelled = true }
+  }, [lead?.departmentId])
 
   useEffect(() => {
     if (!id || !lead) return
@@ -361,6 +376,17 @@ const LeadCardPage: React.FC = () => {
     setEditAssignedTo(lead.assignedTo ?? [])
     setEditCloserId(lead.closerId ?? '')
     setEditing(true)
+  }
+
+  const handleLeadTagChange = async (leadTagId: string | null) => {
+    if (!id) return
+    try {
+      await updateLead(id, { leadTagId })
+      setLead((prev) => (prev ? { ...prev, leadTagId } : null))
+      toast.success('Источник обновлён')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось обновить источник')
+    }
   }
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -565,6 +591,9 @@ const LeadCardPage: React.FC = () => {
           statusItem={statusItem}
           assignedNames={assignedNames}
           closerName={closerName}
+          leadTagOptions={leadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+          canEditLeadSource={canEditLeadSource}
+          onLeadTagChange={handleLeadTagChange}
           onCopyPhone={() => toast.success('Телефон скопирован')}
           onCopyEmail={() => toast.success('Email скопирован')}
           onCopyPhone2={() => toast.success('Телефон 2 скопирован')}

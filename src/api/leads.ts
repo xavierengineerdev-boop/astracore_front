@@ -46,6 +46,10 @@ export type LeadItem = {
   /** Ответственный за закрытие (клоузер) */
   closerId?: string | null
   comment?: string
+  /** Последний комментарий из списка */
+  lastComment?: { content: string; createdAt: string }
+  /** Все комментарии лида (как в карточке), от старых к новым */
+  comments?: { content: string; createdAt: string }[]
   createdAt: string
   updatedAt: string
 }

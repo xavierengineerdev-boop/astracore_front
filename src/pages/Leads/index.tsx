@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Box, Typography, TextField, MenuItem, Button, CircularProgress, InputAdornment, IconButton, Tooltip } from '@mui/material'
+import { Box, Typography, TextField, MenuItem, CircularProgress, InputAdornment, IconButton, Tooltip } from '@mui/material'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
+import PersonOffIcon from '@mui/icons-material/PersonOff'
+import GroupIcon from '@mui/icons-material/Group'
+import PersonIcon from '@mui/icons-material/Person'
 import UploadIcon from '@mui/icons-material/Upload'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import ClearIcon from '@mui/icons-material/Clear'
 import SearchIcon from '@mui/icons-material/Search'
+import ViewColumnIcon from '@mui/icons-material/ViewColumn'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
 import { getLeadTagsByDepartment, type LeadTagItem } from '@/api/leadTags'
+import { getLeadsTableColumnVisibility, saveLeadsTableColumnVisibility, type LeadsTableColumnVisibility } from '@/api/users'
 import {
   getLeadsByDepartment,
   createLead,
@@ -20,6 +25,7 @@ import {
   bulkCreateLeads,
   bulkUpdateLeads,
   bulkDeleteLeads,
+  addLeadComment,
   type LeadItem,
 } from '@/api/leads'
 import * as XLSX from 'xlsx'
@@ -28,6 +34,7 @@ import {
   LeadsFiltersDrawer,
   LeadsBulkBar,
   LeadsTable,
+  LeadsColumnSettingsDialog,
   LeadFormDialog,
   LeadDeleteDialog,
   LeadCommentPopup,
@@ -114,6 +121,8 @@ const LeadsPage: React.FC = () => {
     setSearchParams((prev) => mergeSearchParams(prev, { scope: scope === 'all' ? undefined : scope, page: 0 }))
   }
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
+  const [columnVisibility, setColumnVisibility] = useState<LeadsTableColumnVisibility>({})
+  const [columnSettingsDialogOpen, setColumnSettingsDialogOpen] = useState(false)
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [bulkEditStatusId, setBulkEditStatusId] = useState('')
@@ -246,6 +255,14 @@ const LeadsPage: React.FC = () => {
     }
     return () => { cancelled = true }
   }, [user?.role, (user as { departmentId?: string })?.departmentId])
+
+  useEffect(() => {
+    let cancelled = false
+    getLeadsTableColumnVisibility()
+      .then((v) => { if (!cancelled) setColumnVisibility(v) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!selectedDepartmentId) {
@@ -729,17 +746,34 @@ const LeadsPage: React.FC = () => {
 
   const openCommentPopup = (lead: LeadItem) => {
     setCommentPopupLead(lead)
-    setCommentPopupValue('') // всегда пустое поле — чтобы добавить новый комментарий
+    setCommentPopupValue('')
   }
 
   const handleCommentPopupSave = async () => {
     if (!commentPopupLead) return
+    const newComment = commentPopupValue.trim()
+    if (!newComment) {
+      toast.error('Введите текст комментария')
+      return
+    }
     setCommentPopupSaving(true)
     try {
-      await updateLead(commentPopupLead._id, { comment: commentPopupValue.trim() })
-      toast.success('Комментарий сохранён')
-      await refetchLeads()
+      await addLeadComment(commentPopupLead._id, newComment)
+      toast.success('Комментарий добавлен')
+      const newEntry = { content: newComment, createdAt: new Date().toISOString() }
+      setLeads((prev) =>
+        prev.map((l) =>
+          l._id === commentPopupLead._id
+            ? {
+                ...l,
+                lastComment: newEntry,
+                comments: [...(l.comments ?? []), newEntry],
+              }
+            : l,
+        ),
+      )
       setCommentPopupLead(null)
+      await refetchLeads()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -774,50 +808,50 @@ const LeadsPage: React.FC = () => {
         minHeight: 500,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2, flexShrink: 0 }}>
-        <BackButton fallbackTo="/" />
-        <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600 }}>
-          Лиды
-        </Typography>
-      </Box>
-
       {loadingDepts ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
         </Box>
       ) : departments.length === 0 ? (
-        <Typography color="rgba(255,255,255,0.6)">Нет доступных отделов.</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <BackButton fallbackTo="/" />
+          <Typography color="rgba(255,255,255,0.6)">Нет доступных отделов.</Typography>
+        </Box>
       ) : (
         <>
-          {(user?.role === 'super' || user?.role === 'admin') && departments.length > 1 && (
-            <TextField
-              select
-              label="Отдел"
-              value={selectedDepartmentId}
-              onChange={(e) => {
-                const id = e.target.value
-                setSelectedDepartmentId(id)
-                setSearchParams((prev) => mergeSearchParams(prev, { departmentId: id || undefined, page: 0 }))
-              }}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2, minWidth: 260, ...formFieldSx }}
-              SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
-            >
-              {departments.map((d) => (
-                <MenuItem key={d._id} value={d._id}>{d.name}</MenuItem>
-              ))}
-            </TextField>
-          )}
-
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1, flexWrap: 'wrap' }}>
-            <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-              Лиды
-              {leadTotal > 0 && (
-                <Typography component="span" variant="body2" sx={{ ml: 1, color: 'rgba(255,255,255,0.5)' }}>
-                  ({leadTotal})
-                </Typography>
-              )}
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
+              <BackButton fallbackTo="/" />
+              <Typography variant="h5" sx={{ fontFamily: '"Orbitron", sans-serif', fontWeight: 600, flexShrink: 0 }}>
+                Лиды
+                {leadTotal > 0 && (
+                  <Typography component="span" variant="body2" sx={{ ml: 0.5, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}>
+                    ({leadTotal})
+                  </Typography>
+                )}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 8 }} />
+            {(user?.role === 'super' || user?.role === 'admin') && departments.length > 1 && (
+              <TextField
+                select
+                size="small"
+                label="Отдел"
+                value={selectedDepartmentId}
+                onChange={(e) => {
+                  const id = e.target.value
+                  setSelectedDepartmentId(id)
+                  setSearchParams((prev) => mergeSearchParams(prev, { departmentId: id || undefined, page: 0 }))
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 120, maxWidth: 160, '& .MuiInputBase-input': { py: 0.5 }, ...formFieldSx }}
+                SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+              >
+                {departments.map((d) => (
+                  <MenuItem key={d._id} value={d._id}>{d.name}</MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               size="small"
               placeholder="Поиск по имени, телефону, email…"
@@ -826,14 +860,15 @@ const LeadsPage: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 20 }} />
+                    <SearchIcon sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 18 }} />
                   </InputAdornment>
                 ),
-                sx: { color: 'rgba(255,255,255,0.95)', '& input': { py: 0.75 } },
+                sx: { color: 'rgba(255,255,255,0.95)', '& input': { py: 0.5 } },
               }}
               sx={{
-                minWidth: 260,
-                maxWidth: 320,
+                width: 220,
+                maxWidth: 280,
+                flex: '1 1 220px',
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'rgba(255,255,255,0.06)',
                   '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
@@ -842,35 +877,53 @@ const LeadsPage: React.FC = () => {
                 },
               }}
             />
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'nowrap', alignItems: 'center', flexShrink: 0 }}>
               {!isEmployee && (
                 <>
-                  <Button
-                    size="small"
-                    variant={leadScope === 'all' ? 'contained' : 'outlined'}
-                    onClick={() => setLeadScope('all')}
-                    sx={leadScope === 'all' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
-                  >
-                    Неназначенные
-                  </Button>
-                  <Button
-                    size="small"
-                    variant={leadScope === 'department' ? 'contained' : 'outlined'}
-                    onClick={() => setLeadScope('department')}
-                    sx={leadScope === 'department' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
-                  >
-                    Все лиды отдела
-                  </Button>
+                  <Tooltip title="Неназначенные">
+                    <IconButton
+                      size="small"
+                      onClick={() => setLeadScope('all')}
+                      sx={
+                        leadScope === 'all'
+                          ? { bgcolor: 'rgba(167,139,250,0.5)', color: 'rgba(255,255,255,0.95)', '&:hover': { bgcolor: 'rgba(167,139,250,0.6)' } }
+                          : { color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(167,139,250,0.5)' }
+                      }
+                      aria-label="Неназначенные"
+                    >
+                      <PersonOffIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Все лиды отдела">
+                    <IconButton
+                      size="small"
+                      onClick={() => setLeadScope('department')}
+                      sx={
+                        leadScope === 'department'
+                          ? { bgcolor: 'rgba(167,139,250,0.5)', color: 'rgba(255,255,255,0.95)', '&:hover': { bgcolor: 'rgba(167,139,250,0.6)' } }
+                          : { color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(167,139,250,0.5)' }
+                      }
+                      aria-label="Все лиды отдела"
+                    >
+                      <GroupIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </>
               )}
-              <Button
-                size="small"
-                variant={leadScope === 'mine' ? 'contained' : 'outlined'}
-                onClick={() => setLeadScope('mine')}
-                sx={leadScope === 'mine' ? { bgcolor: 'rgba(167,139,250,0.5)' } : { color: 'rgba(255,255,255,0.7)' }}
-              >
-                Мои лиды
-              </Button>
+              <Tooltip title="Мои лиды">
+                <IconButton
+                  size="small"
+                  onClick={() => setLeadScope('mine')}
+                  sx={
+                    leadScope === 'mine'
+                      ? { bgcolor: 'rgba(167,139,250,0.5)', color: 'rgba(255,255,255,0.95)', '&:hover': { bgcolor: 'rgba(167,139,250,0.6)' } }
+                      : { color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(167,139,250,0.5)' }
+                  }
+                  aria-label="Мои лиды"
+                >
+                  <PersonIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Фильтры">
                 <IconButton
                   size="small"
@@ -889,6 +942,16 @@ const LeadsPage: React.FC = () => {
                   aria-label="Сбросить фильтры"
                 >
                   <ClearIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Настройка столбцов">
+                <IconButton
+                  size="small"
+                  onClick={() => setColumnSettingsDialogOpen(true)}
+                  sx={{ color: 'rgba(255,255,255,0.7)' }}
+                  aria-label="Настройка столбцов"
+                >
+                  <ViewColumnIcon />
                 </IconButton>
               </Tooltip>
               {canCreateLead && (
@@ -921,6 +984,21 @@ const LeadsPage: React.FC = () => {
               )}
             </Box>
           </Box>
+
+          <LeadsColumnSettingsDialog
+            open={columnSettingsDialogOpen}
+            onClose={() => setColumnSettingsDialogOpen(false)}
+            visibility={columnVisibility}
+            onVisibilityChange={setColumnVisibility}
+            onSave={async (visibility) => {
+              try {
+                await saveLeadsTableColumnVisibility(visibility)
+                toast.success('Настройки столбцов сохранены')
+              } catch {
+                toast.error('Не удалось сохранить настройки')
+              }
+            }}
+          />
 
           <LeadsFiltersDrawer
             open={filterDrawerOpen}
@@ -976,6 +1054,7 @@ const LeadsPage: React.FC = () => {
             rowsPerPage={leadRowsPerPage}
             onPageChange={handleLeadPageChange}
             onRowsPerPageChange={handleLeadRowsPerPageChange}
+            columnVisibility={columnVisibility}
             statuses={statuses}
             leadTagMap={leadTagMap}
             leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
