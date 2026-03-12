@@ -451,6 +451,7 @@ const LeadCardPage: React.FC = () => {
       setCommentContent('')
       toast.success('Комментарий добавлен')
       refetchNotesAndHistory()
+      try { sessionStorage.setItem('leadsListStale', '1') } catch { /* ignore */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -471,6 +472,7 @@ const LeadCardPage: React.FC = () => {
       setCommentEditId(null)
       toast.success('Комментарий сохранён')
       refetchNotesAndHistory()
+      try { sessionStorage.setItem('leadsListStale', '1') } catch { /* ignore */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -485,6 +487,7 @@ const LeadCardPage: React.FC = () => {
       setCommentDeleteId(null)
       toast.success('Комментарий удалён')
       refetchNotesAndHistory()
+      try { sessionStorage.setItem('leadsListStale', '1') } catch { /* ignore */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -522,6 +525,7 @@ const LeadCardPage: React.FC = () => {
       setEditing(false)
       toast.success('Лид обновлён')
       refetchNotesAndHistory()
+      try { sessionStorage.setItem('leadsListStale', '1') } catch { /* ignore */ }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка сохранения')
     } finally {

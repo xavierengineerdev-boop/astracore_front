@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Box, Typography, TextField, MenuItem, CircularProgress, InputAdornment, IconButton, Tooltip } from '@mui/material'
 import PersonAddIcon from '@mui/icons-material/PersonAdd'
@@ -61,6 +61,8 @@ function mergeSearchParams(
   return p
 }
 
+const LEADS_LIST_STALE_KEY = 'leadsListStale'
+
 const LeadsPage: React.FC = () => {
   const { user } = useAuth()
   const toast = useToast()
@@ -92,7 +94,7 @@ const LeadsPage: React.FC = () => {
   const leadFilterAssignedTo = searchParams.get('assignedTo') ?? ''
   const leadFilterDateFrom = searchParams.get('dateFrom') ?? ''
   const leadFilterDateTo = searchParams.get('dateTo') ?? ''
-  const leadSortBy = (searchParams.get('sortBy') ?? 'createdAt').trim() || 'createdAt'
+  const leadSortBy = (searchParams.get('sortBy') ?? 'updatedAt').trim() || 'updatedAt'
   const leadSortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc'
   const leadScope = user?.role === 'employee' ? 'mine' : scopeFromUrl
 
@@ -114,7 +116,7 @@ const LeadsPage: React.FC = () => {
   const setLeadFilterAssignedTo = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { assignedTo: v.trim() || undefined, page: 0 }))
   const setLeadFilterDateFrom = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { dateFrom: v.trim() || undefined, page: 0 }))
   const setLeadFilterDateTo = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { dateTo: v.trim() || undefined, page: 0 }))
-  const setLeadSortBy = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { sortBy: v === 'createdAt' ? undefined : v, page: 0 }))
+  const setLeadSortBy = (v: string) => setSearchParams((prev) => mergeSearchParams(prev, { sortBy: v === 'updatedAt' ? undefined : v, page: 0 }))
   const setLeadSortOrder = (v: 'asc' | 'desc') => setSearchParams((prev) => mergeSearchParams(prev, { sortOrder: v === 'desc' ? undefined : v, page: 0 }))
   const setLeadScope = (scope: 'all' | 'department' | 'mine') => {
     if (user?.role === 'employee') return
@@ -398,6 +400,31 @@ const LeadsPage: React.FC = () => {
       setLeadLoading(false)
     }
   }
+
+  const refetchLeadsRef = useRef(refetchLeads)
+  refetchLeadsRef.current = refetchLeads
+
+  // Рефетч списка при возврате на страницу лидов после добавления/изменения комментария в карточке
+  useEffect(() => {
+    if (!selectedDepartmentId) return
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(LEADS_LIST_STALE_KEY) === '1') {
+      sessionStorage.removeItem(LEADS_LIST_STALE_KEY)
+      refetchLeadsRef.current()
+    }
+  }, [selectedDepartmentId])
+
+  // Рефетч при переключении обратно на вкладку (если комментарий меняли в карточке в другой вкладке)
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(LEADS_LIST_STALE_KEY) === '1') {
+        sessionStorage.removeItem(LEADS_LIST_STALE_KEY)
+        refetchLeadsRef.current()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
 
   const resetLeadFilters = () => {
     setSearchParams((prev) => {
