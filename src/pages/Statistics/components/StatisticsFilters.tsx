@@ -50,8 +50,11 @@ function getQuickPeriodRange(period: QuickPeriod): { from: Dayjs; to: Dayjs } {
       return { from: now.subtract(1, 'week').startOf('day'), to: now }
     case 'month':
       return { from: now.subtract(1, 'month').startOf('month'), to: now.subtract(1, 'month').endOf('month') }
-    case 'quarter':
-      return { from: now.subtract(1, 'quarter').startOf('quarter'), to: now.subtract(1, 'quarter').endOf('quarter') }
+    case 'quarter': {
+      const startOfQuarter = now.subtract(3, 'month').startOf('month')
+      const endOfQuarter = now.subtract(1, 'month').endOf('month')
+      return { from: startOfQuarter, to: endOfQuarter }
+    }
     default:
       return { from: now.subtract(1, 'month').startOf('month'), to: now.subtract(1, 'month').endOf('month') }
   }
@@ -102,14 +105,7 @@ const StatisticsFilters: React.FC<StatisticsFiltersProps> = ({
             onChange={(e) => onDepartmentChange(e.target.value)}
             label="Отдел"
             disabled={loadingDepts}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start" sx={{ ml: 0.5 }}>
-                  <BusinessIcon sx={{ fontSize: 20, color: 'rgba(167,139,250,0.7)' }} />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ '& .MuiSelect-select': { pl: 1.5 } }}
+            sx={{ '& .MuiSelect-select': { pl: 1.5 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.12)' } }}
           >
             {departments.map((d) => (
               <MenuItem key={d._id} value={d._id}>{d.name}</MenuItem>
@@ -187,14 +183,7 @@ const StatisticsFilters: React.FC<StatisticsFiltersProps> = ({
             value={filterStatusId}
             onChange={(e) => onFilterStatusIdChange(e.target.value)}
             label="Статус"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start" sx={{ ml: 0.5 }}>
-                  <LabelIcon sx={{ fontSize: 20, color: 'rgba(167,139,250,0.7)' }} />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ '& .MuiSelect-select': { pl: 1.5 } }}
+            sx={{ '& .MuiSelect-select': { pl: 1.5 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.12)' } }}
           >
             <MenuItem value="">Все</MenuItem>
             {statuses.map((s) => (

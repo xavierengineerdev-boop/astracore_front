@@ -117,7 +117,7 @@ const UserCardPage: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(false)
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [leadsPage, setLeadsPage] = useState(0)
-  const [leadsRowsPerPage, setLeadsRowsPerPage] = useState(ROWS_PER_PAGE_OPTIONS[0])
+  const [leadsRowsPerPage, setLeadsRowsPerPage] = useState<number>(ROWS_PER_PAGE_OPTIONS[0])
   const [leadFilterStatusId, setLeadFilterStatusId] = useState('')
   const [leadFilterSearch, setLeadFilterSearch] = useState('')
   const [leadFilterPhone, setLeadFilterPhone] = useState('')

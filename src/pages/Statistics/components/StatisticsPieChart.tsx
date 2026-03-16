@@ -8,7 +8,7 @@ export interface StatisticsPieChartProps {
   stats: LeadStatsResult
 }
 
-function PieTooltip({ active, payload, total }: { active?: boolean; payload?: Array<{ name: string; value: number }>; total: number }) {
+function PieTooltip({ active, payload, total }: { active?: boolean; payload?: readonly { name: string; value: number }[]; total: number }) {
   if (!active || !payload?.length) return null
   const p = payload[0]
   const pct = total > 0 ? Math.round((p.value / total) * 100) : 0
@@ -94,7 +94,7 @@ const StatisticsPieChart: React.FC<StatisticsPieChartProps> = ({ stats }) => {
           </Pie>
           <Tooltip
             content={({ active, payload }) => (
-              <PieTooltip active={active} payload={payload} total={total} />
+              <PieTooltip active={active} payload={payload ? [...payload] : undefined} total={total} />
             )}
           />
         </PieChart>
