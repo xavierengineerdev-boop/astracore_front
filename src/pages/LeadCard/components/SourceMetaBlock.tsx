@@ -8,7 +8,7 @@ export interface SourceMetaBlockProps {
 
 const SourceMetaBlock: React.FC<SourceMetaBlockProps> = ({ lead }) => {
   const sm = lead.sourceMeta
-  const rows: { label: string; value: string | undefined }[] = [
+  const allRows: { label: string; value: string | undefined }[] = [
     { label: 'IP', value: sm?.ip },
     { label: 'User-Agent', value: sm?.userAgent },
     { label: 'Referrer', value: sm?.referrer },
@@ -21,9 +21,12 @@ const SourceMetaBlock: React.FC<SourceMetaBlockProps> = ({ lead }) => {
   ]
   if (sm?.extra && typeof sm.extra === 'object') {
     Object.entries(sm.extra).forEach(([k, v]) => {
-      rows.push({ label: k, value: v != null ? String(v) : undefined })
+      allRows.push({ label: k, value: v != null ? String(v) : undefined })
     })
   }
+
+  const rows = allRows.filter((r) => r.value != null && String(r.value).trim() !== '')
+  if (rows.length === 0) return null
 
   return (
     <Paper
@@ -46,7 +49,7 @@ const SourceMetaBlock: React.FC<SourceMetaBlockProps> = ({ lead }) => {
             <Typography
               variant="body2"
               sx={{
-                color: r.value ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
+                color: 'rgba(255,255,255,0.9)',
                 wordBreak: 'break-word',
                 overflow: 'hidden',
                 display: '-webkit-box',
@@ -54,7 +57,7 @@ const SourceMetaBlock: React.FC<SourceMetaBlockProps> = ({ lead }) => {
                 WebkitBoxOrient: 'vertical',
               }}
             >
-              {r.value?.trim() || '—'}
+              {r.value!.trim()}
             </Typography>
           </Box>
         ))}

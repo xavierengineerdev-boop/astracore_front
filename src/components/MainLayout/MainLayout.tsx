@@ -347,8 +347,17 @@ const MainLayout: React.FC = () => {
                   <Typography variant="body2" color="rgba(255,255,255,0.5)">Загрузка…</Typography>
                 </Box>
               ) : upcomingReminders.length === 0 ? (
-                <Box sx={{ py: 3, textAlign: 'center' }}>
+                <Box sx={{ py: 2, px: 2, textAlign: 'center' }}>
                   <Typography variant="body2" color="rgba(255,255,255,0.5)">Нет напоминаний на ближайшие 24 ч</Typography>
+                  <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.4)', mt: 0.5 }}>
+                    Создайте напоминание в карточке лида.
+                  </Typography>
+                  <MenuItem
+                    onClick={() => { setNotifAnchor(null); navigate('/leads') }}
+                    sx={{ justifyContent: 'center', color: '#a78bfa', mt: 1 }}
+                  >
+                    Перейти к лидам
+                  </MenuItem>
                 </Box>
               ) : (
                 upcomingReminders.map((r) => (

@@ -15,27 +15,23 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  InputAdornment,
   Tooltip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
+  Drawer,
   Grid,
   Avatar,
   alpha,
-  Checkbox,
 } from '@mui/material'
 import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove'
 import ContactPageIcon from '@mui/icons-material/ContactPage'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
-import PhoneIcon from '@mui/icons-material/Phone'
+import SearchIcon from '@mui/icons-material/Search'
+import FilterListIcon from '@mui/icons-material/FilterList'
+import ClearIcon from '@mui/icons-material/Clear'
+import CloseIcon from '@mui/icons-material/Close'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import DonutSmallIcon from '@mui/icons-material/DonutSmall'
 import { useAuth } from '@/auth/AuthProvider'
@@ -44,16 +40,23 @@ import { getCreatableRoles, ROLE_LABELS } from '@/constants/roles'
 import { getUser, updateUser, deleteUser, getUserLeads, getUserLeadStats, type UserItem, type UserLeadStatsResult } from '@/api/users'
 import { getDepartments, getDepartment, type DepartmentItem, type DepartmentDetail } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
-import { updateLead, bulkUpdateLeads } from '@/api/leads'
+import { updateLead, bulkUpdateLeads, deleteLead, type LeadItem } from '@/api/leads'
+import { getLeadTagsByDepartment, type LeadTagItem } from '@/api/leadTags'
 import { formFieldSx } from '@/theme/formStyles'
 import LeadCommentPopup from '@/pages/Leads/components/LeadCommentPopup'
+import LeadsTable from '@/pages/Leads/components/LeadsTable'
+import LeadDeleteDialog from '@/pages/Leads/components/LeadDeleteDialog'
+import { ROWS_PER_PAGE_OPTIONS, DATE_PICKER_POPPER_SX } from '@/pages/Leads/constants'
 import type { LeadItemWithMeta } from '@/api/users'
-import { usePhoneRules } from '@/hooks/usePhoneRules'
-import { getPhoneCountryInfo } from '@/utils/phoneCountry'
-import { formatPhoneDisplay, getTelHref } from '@/utils/phone'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import dayjs, { type Dayjs } from 'dayjs'
+import 'dayjs/locale/ru'
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts'
 
 const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6']
+
 
 /** Тултип графиков с белым текстом на тёмном фоне (круговая диаграмма и линейный график) */
 function ChartTooltipContent({
@@ -114,11 +117,21 @@ const UserCardPage: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(false)
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [leadsPage, setLeadsPage] = useState(0)
-  const [leadsRowsPerPage, setLeadsRowsPerPage] = useState(10)
+  const [leadsRowsPerPage, setLeadsRowsPerPage] = useState(ROWS_PER_PAGE_OPTIONS[0])
   const [leadFilterStatusId, setLeadFilterStatusId] = useState('')
+  const [leadFilterSearch, setLeadFilterSearch] = useState('')
+  const [leadFilterPhone, setLeadFilterPhone] = useState('')
+  const [leadFilterEmail, setLeadFilterEmail] = useState('')
+  const [leadFilterDateFrom, setLeadFilterDateFrom] = useState('')
+  const [leadFilterDateTo, setLeadFilterDateTo] = useState('')
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+  const [leadSortBy, setLeadSortBy] = useState('updatedAt')
+  const [leadSortOrder, setLeadSortOrder] = useState<'asc' | 'desc'>('desc')
   const [statusesForFilter, setStatusesForFilter] = useState<StatusItem[]>([])
-  const [updatingLeadStatusId, setUpdatingLeadStatusId] = useState<string | null>(null)
-  const [updatingLeadAssigneeId, setUpdatingLeadAssigneeId] = useState<string | null>(null)
+  const [departmentLeadTags, setDepartmentLeadTags] = useState<LeadTagItem[]>([])
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null)
+  const [leadDeleteId, setLeadDeleteId] = useState<string | null>(null)
+  const [leadDeleting, setLeadDeleting] = useState(false)
   const [commentPopupLead, setCommentPopupLead] = useState<LeadItemWithMeta | null>(null)
   const [commentPopupValue, setCommentPopupValue] = useState('')
   const [commentPopupSaving, setCommentPopupSaving] = useState(false)
@@ -126,7 +139,6 @@ const UserCardPage: React.FC = () => {
   const [bulkReassignAssigneeId, setBulkReassignAssigneeId] = useState('')
   const [bulkReassignSaving, setBulkReassignSaving] = useState(false)
   const [departmentDetailForLeads, setDepartmentDetailForLeads] = useState<DepartmentDetail | null>(null)
-  const phoneRules = usePhoneRules()
   const creatableRoles = getCreatableRoles(currentUser?.role ?? '')
   const isOwnProfile = Boolean(id && currentUser?.userId && String(currentUser.userId) === String(id))
   const canAccess = creatableRoles.length > 0 || isOwnProfile
@@ -208,6 +220,24 @@ const UserCardPage: React.FC = () => {
 
   useEffect(() => {
     if (!user?.departmentId) {
+      setDepartmentLeadTags([])
+      return
+    }
+    let cancelled = false
+    getLeadTagsByDepartment(user.departmentId)
+      .then((tags) => { if (!cancelled) setDepartmentLeadTags(tags) })
+      .catch(() => { if (!cancelled) setDepartmentLeadTags([]) })
+    return () => { cancelled = true }
+  }, [user?.departmentId])
+
+  const leadTagMap = React.useMemo(() => {
+    const m: Record<string, { name: string; color: string }> = {}
+    departmentLeadTags.forEach((t) => { m[t._id] = { name: t.name, color: t.color || '#9ca3af' } })
+    return m
+  }, [departmentLeadTags])
+
+  useEffect(() => {
+    if (!user?.departmentId) {
       setDepartmentDetailForLeads(null)
       return
     }
@@ -232,7 +262,7 @@ const UserCardPage: React.FC = () => {
     return () => { cancelled = true }
   }, [id, user])
 
-  // Таблица лидов — перезапрос только при смене страницы или фильтра «Статус».
+  // Таблица лидов — перезапрос при смене страницы, фильтров или сортировки.
   useEffect(() => {
     if (!id || !user) return
     let cancelled = false
@@ -240,9 +270,14 @@ const UserCardPage: React.FC = () => {
     getUserLeads(id, {
       skip: leadsPage * leadsRowsPerPage,
       limit: leadsRowsPerPage,
+      name: leadFilterSearch.trim() || undefined,
+      phone: leadFilterPhone.trim() || undefined,
+      email: leadFilterEmail.trim() || undefined,
       statusId: leadFilterStatusId || undefined,
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
+      lastCommentDateFrom: leadFilterDateFrom.trim() || undefined,
+      lastCommentDateTo: leadFilterDateTo.trim() || undefined,
+      sortBy: leadSortBy,
+      sortOrder: leadSortOrder,
     })
       .then((leadsData) => {
         if (!cancelled) setUserLeads(leadsData)
@@ -252,23 +287,28 @@ const UserCardPage: React.FC = () => {
       })
       .finally(() => { if (!cancelled) setLoadingLeads(false) })
     return () => { cancelled = true }
-  }, [id, user, leadsPage, leadsRowsPerPage, leadFilterStatusId])
+  }, [id, user, leadsPage, leadsRowsPerPage, leadFilterStatusId, leadFilterSearch, leadFilterPhone, leadFilterEmail, leadFilterDateFrom, leadFilterDateTo, leadSortBy, leadSortOrder])
 
   const refetchUserLeads = () => {
     if (!id || !user) return
     getUserLeads(id, {
       skip: leadsPage * leadsRowsPerPage,
       limit: leadsRowsPerPage,
+      name: leadFilterSearch.trim() || undefined,
+      phone: leadFilterPhone.trim() || undefined,
+      email: leadFilterEmail.trim() || undefined,
       statusId: leadFilterStatusId || undefined,
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
+      lastCommentDateFrom: leadFilterDateFrom.trim() || undefined,
+      lastCommentDateTo: leadFilterDateTo.trim() || undefined,
+      sortBy: leadSortBy,
+      sortOrder: leadSortOrder,
     })
       .then(setUserLeads)
       .catch(() => setUserLeads(null))
   }
 
   const handleLeadStatusChange = async (leadId: string, newStatusId: string) => {
-    setUpdatingLeadStatusId(leadId)
+    setUpdatingLeadId(leadId)
     try {
       await updateLead(leadId, { statusId: newStatusId || undefined })
       toast.success('Статус обновлён')
@@ -276,12 +316,12 @@ const UserCardPage: React.FC = () => {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не удалось обновить статус')
     } finally {
-      setUpdatingLeadStatusId(null)
+      setUpdatingLeadId(null)
     }
   }
 
   const handleLeadAssigneeChange = async (leadId: string, newAssigneeId: string) => {
-    setUpdatingLeadAssigneeId(leadId)
+    setUpdatingLeadId(leadId)
     try {
       await updateLead(leadId, { assignedTo: newAssigneeId ? [newAssigneeId] : [] })
       toast.success('Лид переназначен')
@@ -289,7 +329,48 @@ const UserCardPage: React.FC = () => {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Не удалось переназначить лид')
     } finally {
-      setUpdatingLeadAssigneeId(null)
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleCloserChange = async (leadId: string, closerId: string | null) => {
+    setUpdatingLeadId(leadId)
+    try {
+      await updateLead(leadId, { closerId: closerId || undefined })
+      toast.success('Клоузер обновлён')
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось обновить клоузера')
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleLeadTagChange = async (leadId: string, leadTagId: string | null) => {
+    setUpdatingLeadId(leadId)
+    try {
+      await updateLead(leadId, { leadTagId: leadTagId ?? undefined })
+      toast.success('Источник обновлён')
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Не удалось обновить источник')
+    } finally {
+      setUpdatingLeadId(null)
+    }
+  }
+
+  const handleLeadDelete = async () => {
+    if (!leadDeleteId) return
+    setLeadDeleting(true)
+    try {
+      await deleteLead(leadDeleteId)
+      toast.success('Лид удалён')
+      setLeadDeleteId(null)
+      refetchUserLeads()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка удаления')
+    } finally {
+      setLeadDeleting(false)
     }
   }
 
@@ -745,23 +826,236 @@ const UserCardPage: React.FC = () => {
         )}
       </Typography>
       <Paper sx={{ bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
-        {user?.departmentId && statusesForFilter.length > 0 && (
-          <Box sx={{ p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: '1px solid rgba(255,255,255,0.08)', alignItems: 'center' }}>
+        {user?.departmentId && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              flexWrap: 'wrap',
+              p: 1.5,
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              bgcolor: 'rgba(255,255,255,0.04)',
+            }}
+          >
             <TextField
-              select
               size="small"
-              label="Статус"
-              value={leadFilterStatusId}
-              onChange={(e) => { setLeadFilterStatusId(e.target.value); setLeadsPage(0) }}
-              sx={{ minWidth: 180, ...formFieldSx }}
-              SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
-            >
-              <MenuItem value="">Все</MenuItem>
-              {statusesForFilter.map((s) => (
-                <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
-              ))}
-            </TextField>
+              placeholder="Поиск по имени, телефону, email…"
+              value={leadFilterSearch}
+              onChange={(e) => { setLeadFilterSearch(e.target.value); setLeadsPage(0) }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+                sx: { color: 'rgba(255,255,255,0.95)', '& input': { py: 0.5 } },
+              }}
+              sx={{
+                width: 220,
+                maxWidth: 280,
+                flex: '1 1 200px',
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'rgba(255,255,255,0.06)',
+                  '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                  '&.Mui-focused fieldset': { borderColor: 'rgba(167,139,250,0.6)' },
+                },
+              }}
+            />
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+              <Tooltip title="Фильтры">
+                <IconButton
+                  size="small"
+                  onClick={() => setFilterPanelOpen(true)}
+                  sx={{
+                    color: (leadFilterSearch || leadFilterStatusId || leadFilterPhone || leadFilterEmail || leadFilterDateFrom || leadFilterDateTo) ? 'rgba(167,139,250,0.95)' : 'rgba(167,139,250,0.8)',
+                    bgcolor: (leadFilterSearch || leadFilterStatusId || leadFilterPhone || leadFilterEmail || leadFilterDateFrom || leadFilterDateTo) ? 'rgba(167,139,250,0.15)' : 'transparent',
+                  }}
+                  aria-label="Открыть фильтры"
+                >
+                  <FilterListIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Сбросить фильтры">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setLeadFilterSearch('')
+                    setLeadFilterStatusId('')
+                    setLeadFilterPhone('')
+                    setLeadFilterEmail('')
+                    setLeadFilterDateFrom('')
+                    setLeadFilterDateTo('')
+                    setLeadsPage(0)
+                  }}
+                  disabled={!leadFilterSearch && !leadFilterStatusId && !leadFilterPhone && !leadFilterEmail && !leadFilterDateFrom && !leadFilterDateTo}
+                  sx={{
+                    color: (leadFilterSearch || leadFilterStatusId || leadFilterPhone || leadFilterEmail || leadFilterDateFrom || leadFilterDateTo) ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.35)',
+                  }}
+                  aria-label="Сбросить фильтры"
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
+        )}
+        {/* Боковая панель фильтров лидов сотрудника */}
+        {user?.departmentId && (
+          <Drawer
+            anchor="right"
+            open={filterPanelOpen}
+            onClose={() => setFilterPanelOpen(false)}
+            PaperProps={{
+              sx: {
+                width: { xs: '100%', sm: 360 },
+                bgcolor: 'rgba(18,18,24,0.98)',
+                borderLeft: '1px solid rgba(255,255,255,0.08)',
+              },
+            }}
+          >
+            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, color: 'rgba(255,255,255,0.95)' }}>
+                  Фильтры и сортировка
+                </Typography>
+                <IconButton onClick={() => setFilterPanelOpen(false)} sx={{ color: 'rgba(255,255,255,0.7)' }} aria-label="Закрыть">
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'auto' }}>
+                <TextField
+                  size="small"
+                  label="Имя"
+                  placeholder="Поиск по имени…"
+                  value={leadFilterSearch}
+                  onChange={(e) => { setLeadFilterSearch(e.target.value); setLeadsPage(0) }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={formFieldSx}
+                  InputProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                />
+                <TextField
+                  size="small"
+                  label="Телефон"
+                  placeholder="Поиск по телефону…"
+                  value={leadFilterPhone}
+                  onChange={(e) => { setLeadFilterPhone(e.target.value); setLeadsPage(0) }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={formFieldSx}
+                  InputProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                />
+                <TextField
+                  size="small"
+                  label="Email"
+                  placeholder="Поиск по email…"
+                  value={leadFilterEmail}
+                  onChange={(e) => { setLeadFilterEmail(e.target.value); setLeadsPage(0) }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={formFieldSx}
+                  InputProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                />
+                {statusesForFilter.length > 0 && (
+                  <TextField
+                    select
+                    size="small"
+                    label="Статус"
+                    value={leadFilterStatusId}
+                    onChange={(e) => { setLeadFilterStatusId(e.target.value); setLeadsPage(0) }}
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                    sx={formFieldSx}
+                    SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                  >
+                    <MenuItem value="">Все статусы</MenuItem>
+                    {statusesForFilter.map((s) => (
+                      <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
+                    ))}
+                  </TextField>
+                )}
+                <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
+                  <DatePicker
+                    label="Дата от (последний комментарий)"
+                    value={leadFilterDateFrom ? dayjs(leadFilterDateFrom) : null}
+                    onChange={(val: Dayjs | null) => {
+                      setLeadFilterDateFrom(val ? val.format('YYYY-MM-DD') : '')
+                      setLeadsPage(0)
+                    }}
+                    slotProps={{ popper: { sx: DATE_PICKER_POPPER_SX }, textField: { fullWidth: true } }}
+                    sx={formFieldSx}
+                  />
+                  <DatePicker
+                    label="Дата по (последний комментарий)"
+                    value={leadFilterDateTo ? dayjs(leadFilterDateTo) : null}
+                    onChange={(val: Dayjs | null) => {
+                      setLeadFilterDateTo(val ? val.format('YYYY-MM-DD') : '')
+                      setLeadsPage(0)
+                    }}
+                    slotProps={{ popper: { sx: DATE_PICKER_POPPER_SX }, textField: { fullWidth: true } }}
+                    sx={formFieldSx}
+                  />
+                </LocalizationProvider>
+                <TextField
+                  select
+                  size="small"
+                  label="Сортировка"
+                  value={leadSortBy}
+                  onChange={(e) => { setLeadSortBy(e.target.value); setLeadsPage(0) }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={formFieldSx}
+                  SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                >
+                  <MenuItem value="updatedAt">По дате изменения</MenuItem>
+                  <MenuItem value="createdAt">По дате создания</MenuItem>
+                  <MenuItem value="name">По имени</MenuItem>
+                  <MenuItem value="phone">По телефону</MenuItem>
+                  <MenuItem value="email">По email</MenuItem>
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Порядок"
+                  value={leadSortOrder}
+                  onChange={(e) => { setLeadSortOrder(e.target.value as 'asc' | 'desc'); setLeadsPage(0) }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={formFieldSx}
+                  SelectProps={{ sx: { color: 'rgba(255,255,255,0.95)' } }}
+                >
+                  <MenuItem value="desc">По убыванию</MenuItem>
+                  <MenuItem value="asc">По возрастанию</MenuItem>
+                </TextField>
+              </Box>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => {
+                  setLeadFilterSearch('')
+                  setLeadFilterStatusId('')
+                  setLeadFilterPhone('')
+                  setLeadFilterEmail('')
+                  setLeadFilterDateFrom('')
+                  setLeadFilterDateTo('')
+                  setLeadSortBy('updatedAt')
+                  setLeadSortOrder('desc')
+                  setLeadsPage(0)
+                  setFilterPanelOpen(false)
+                }}
+                sx={{
+                  borderColor: 'rgba(255,255,255,0.25)',
+                  color: 'rgba(255,255,255,0.9)',
+                  textTransform: 'uppercase',
+                  '&:hover': { borderColor: 'rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.06)' },
+                }}
+              >
+                Сбросить фильтры
+              </Button>
+            </Box>
+          </Drawer>
         )}
         {!userLeads && loadingLeads ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -818,216 +1112,51 @@ const UserCardPage: React.FC = () => {
                 </Button>
               </Box>
             )}
-            <TableContainer sx={{ position: 'relative', minHeight: 200 }}>
-              {loadingLeads && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    bgcolor: 'rgba(0,0,0,0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1,
-                  }}
-                >
-                  <CircularProgress sx={{ color: 'rgba(167,139,250,0.8)' }} />
-                </Box>
-              )}
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    {canReassignLeadsInTable && (
-                      <TableCell padding="checkbox" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
-                        <Checkbox
-                          indeterminate={selectedUserCardLeadIds.length > 0 && !allSelectedOnUserCardPage}
-                          checked={allSelectedOnUserCardPage ?? false}
-                          onChange={toggleSelectAllUserCardLeads}
-                          sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Имя</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Телефон</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Email</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Статус</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Исполнитель</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Комментарий</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Создан</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Дата последнего комментария</TableCell>
-                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {userLeads.items.map((lead) => (
-                    <TableRow key={lead._id} hover sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' } }}>
-                      {canReassignLeadsInTable && (
-                        <TableCell padding="checkbox" sx={{ verticalAlign: 'middle' }}>
-                          <Checkbox
-                            checked={selectedUserCardLeadIds.includes(lead._id)}
-                            onChange={() => toggleSelectUserCardLead(lead._id)}
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ color: 'rgba(255,255,255,0.5)', '&.Mui-checked': { color: 'rgba(167,139,250,0.9)' } }}
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                        {[lead.name, lead.lastName].filter(Boolean).join(' ').trim() || '—'}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <span>{formatPhoneDisplay(lead.phone || lead.phone2, phoneRules) || (lead.phone || lead.phone2 || '').trim() || '—'}</span>
-                          {(() => {
-                            const ph = (lead.phone || lead.phone2 || '').trim()
-                            const info = ph ? getPhoneCountryInfo(ph) : null
-                            const telHref = getTelHref(ph)
-                            return (
-                              <>
-                                {info ? <span>{info.flag}</span> : null}
-                                {telHref && (
-                                  <Tooltip title="Позвонить">
-                                    <Box
-                                      component="a"
-                                      href={telHref}
-                                      sx={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        color: 'rgba(167,139,250,0.9)',
-                                        '&:hover': { color: 'rgba(167,139,250,1)' },
-                                      }}
-                                    >
-                                      <PhoneIcon sx={{ fontSize: 18 }} />
-                                    </Box>
-                                  </Tooltip>
-                                )}
-                              </>
-                            )
-                          })()}
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>{lead.email || '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle' }}>
-                        {canEditLeadStatusInTable && statusesForFilter.length > 0 ? (
-                          <TextField
-                            select
-                            size="small"
-                            value={lead.statusId ?? ''}
-                            onChange={(e) => handleLeadStatusChange(lead._id, e.target.value)}
-                            disabled={updatingLeadStatusId === lead._id}
-                            sx={{ minWidth: 140, ...formFieldSx }}
-                            SelectProps={{
-                              sx: { color: 'rgba(255,255,255,0.95)', py: 0.5 },
-                              renderValue: (v) => {
-                                const s = statusesForFilter.find((st) => st._id === v)
-                                return s ? (s.name ?? '—') : (v ? '—' : 'Без статуса')
-                              },
-                            }}
-                          >
-                            <MenuItem value="">Без статуса</MenuItem>
-                            {statusesForFilter.map((s) => (
-                              <MenuItem key={s._id} value={s._id}>{s.name}</MenuItem>
-                            ))}
-                          </TextField>
-                        ) : (
-                          (lead as import('@/api/users').LeadItemWithMeta).statusName ?? '—'
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)', verticalAlign: 'middle' }}>
-                        {canReassignLeadsInTable && assigneeOptionsForLeads.length > 0 ? (
-                          <TextField
-                            select
-                            size="small"
-                            value={lead.assignedTo?.[0] ?? ''}
-                            onChange={(e) => handleLeadAssigneeChange(lead._id, e.target.value)}
-                            disabled={updatingLeadAssigneeId === lead._id}
-                            sx={{ minWidth: 160, ...formFieldSx }}
-                            SelectProps={{
-                              sx: { color: 'rgba(255,255,255,0.95)', py: 0.5 },
-                              renderValue: (v: unknown) => {
-                                if (v === undefined || v === null || v === '') return 'Не назначен'
-                                const id = String(v)
-                                return assigneeNameMapForLeads.get(id) ?? id
-                              },
-                            }}
-                          >
-                            <MenuItem value="">Не назначен</MenuItem>
-                            {assigneeOptionsForLeads.map((o) => (
-                              <MenuItem key={o.id} value={o.id}>{o.label}</MenuItem>
-                            ))}
-                          </TextField>
-                        ) : (
-                          (lead.assignedTo?.length
-                            ? lead.assignedTo.map((aid) => assigneeNameMapForLeads.get(aid) ?? aid).join(', ')
-                            : '—') || '—'
-                        )}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          color: lead.comment ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
-                          maxWidth: 180,
-                          cursor: canEditLeadCommentInTable ? 'pointer' : 'default',
-                          '&:hover': canEditLeadCommentInTable ? { textDecoration: 'underline', bgcolor: 'rgba(255,255,255,0.04)' } : {},
-                        }}
-                        onClick={(e) => {
-                          if (canEditLeadCommentInTable) {
-                            e.stopPropagation()
-                            openCommentPopup(lead)
-                          }
-                        }}
-                      >
-                        {lead.comment?.trim() ? (
-                          lead.comment.length > 40 ? (
-                            <Tooltip
-                              title={
-                                <Typography component="span" sx={{ whiteSpace: 'pre-wrap', display: 'block', maxWidth: 320 }}>
-                                  {lead.comment}
-                                </Typography>
-                              }
-                              placement="top-start"
-                              enterDelay={300}
-                            >
-                              <span>{lead.comment.slice(0, 40)}…</span>
-                            </Tooltip>
-                          ) : (
-                            lead.comment
-                          )
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.7)' }}>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('ru-RU') : '—'}</TableCell>
-                      <TableCell sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        {(lead as import('@/api/users').LeadItemWithMeta).lastCommentAt
-                          ? new Date((lead as import('@/api/users').LeadItemWithMeta).lastCommentAt!).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                          : '—'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Tooltip title="Открыть карточку лида">
-                          <IconButton
-                            size="small"
-                            onClick={() => window.open(`/leads/${lead._id}${lead.departmentId ? `?departmentId=${lead.departmentId}` : ''}`, '_blank', 'noopener,noreferrer')}
-                            sx={{ color: 'rgba(167,139,250,0.9)' }}
-                          >
-                            <OpenInNewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePagination
-              component="div"
-              count={userLeads.total}
-              page={leadsPage}
-              onPageChange={(_, p) => setLeadsPage(p)}
-              rowsPerPage={leadsRowsPerPage}
-              onRowsPerPageChange={(e) => { setLeadsRowsPerPage(parseInt(e.target.value, 10)); setLeadsPage(0) }}
-              rowsPerPageOptions={[5, 10, 25]}
-              labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count !== -1 ? count : `более ${to}`}`}
-              sx={{ color: 'rgba(255,255,255,0.8)', borderTop: '1px solid rgba(255,255,255,0.08)' }}
-            />
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 400 }}>
+              <LeadsTable
+                leads={userLeads.items as LeadItem[]}
+                loading={loadingLeads}
+                total={userLeads.total}
+                page={leadsPage}
+                rowsPerPage={leadsRowsPerPage}
+                onPageChange={(_, p) => setLeadsPage(p)}
+                onRowsPerPageChange={(e) => { setLeadsRowsPerPage(parseInt(e.target.value, 10)); setLeadsPage(0) }}
+                statuses={statusesForFilter}
+                leadTagMap={leadTagMap}
+                leadTagOptions={departmentLeadTags.map((t) => ({ id: t._id, name: t.name, color: t.color || '#9ca3af' }))}
+                onLeadTagChange={handleLeadTagChange}
+                assigneeOptions={assigneeOptionsForLeads}
+                assigneeNameMap={Object.fromEntries(assigneeNameMapForLeads)}
+                canBulkEdit={canReassignLeadsInTable}
+                canCreateLead={true}
+                isEmployee={currentUser?.role === 'employee'}
+                currentUserId={currentUser?.userId}
+                selectedLeadIds={selectedUserCardLeadIds}
+                allSelectedOnPage={!!allSelectedOnUserCardPage}
+                someSelected={selectedUserCardLeadIds.length > 0}
+                onToggleSelectAll={toggleSelectAllUserCardLeads}
+                onToggleSelectLead={toggleSelectUserCardLead}
+                sortBy={leadSortBy}
+                sortOrder={leadSortOrder}
+                onSortUpdatedAt={() => {
+                  const nextOrder = leadSortBy === 'updatedAt' && leadSortOrder === 'desc' ? 'asc' : 'desc'
+                  setLeadSortBy('updatedAt')
+                  setLeadSortOrder(nextOrder)
+                  setLeadsPage(0)
+                }}
+                onSortReset={() => { setLeadSortBy('updatedAt'); setLeadSortOrder('desc'); setLeadsPage(0) }}
+                onStatusChange={handleLeadStatusChange}
+                onAssignedToChange={(leadId, assignedTo) => handleLeadAssigneeChange(leadId, assignedTo[0] ?? '')}
+                onCloserChange={handleCloserChange}
+                onEditLead={(lead) => window.open(`/leads/${lead._id}${lead.departmentId ? `?departmentId=${lead.departmentId}` : ''}`, '_blank', 'noopener,noreferrer')}
+                onDeleteLead={setLeadDeleteId}
+                updatingLeadId={updatingLeadId}
+                getLeadUrl={(lid) => { const lead = userLeads?.items.find((l) => l._id === lid); return `/leads/${lid}${lead?.departmentId ? `?departmentId=${lead.departmentId}` : ''}` }}
+                onCommentClick={canEditLeadCommentInTable ? openCommentPopup : undefined}
+                onCopyPhone={() => toast.success('Телефон скопирован')}
+                onCopyEmail={() => toast.success('Email скопирован')}
+              />
+            </Box>
             <LeadCommentPopup
               open={!!commentPopupLead}
               onClose={() => !commentPopupSaving && setCommentPopupLead(null)}
@@ -1036,6 +1165,12 @@ const UserCardPage: React.FC = () => {
               onCommentChange={setCommentPopupValue}
               onSave={handleCommentPopupSave}
               saving={commentPopupSaving}
+            />
+            <LeadDeleteDialog
+              open={!!leadDeleteId}
+              onClose={() => !leadDeleting && setLeadDeleteId(null)}
+              onConfirm={handleLeadDelete}
+              deleting={leadDeleting}
             />
           </>
         ) : (

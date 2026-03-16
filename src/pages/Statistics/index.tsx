@@ -6,9 +6,9 @@ import { useToast } from '@/contexts/ToastContext'
 import { getDepartments, type DepartmentItem } from '@/api/departments'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
 import { getLeadStats, type LeadStatsResult } from '@/api/leads'
-import type { Dayjs } from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import { exportStatsToCsv, exportStatsToXlsx } from './constants'
-import { StatisticsFilters, StatisticsExportBar, StatisticsTable } from './components'
+import { StatisticsFilters, StatisticsExportBar, StatisticsTable, StatisticsSummaryCards } from './components'
 
 const StatisticsPage: React.FC = () => {
   const { user } = useAuth()
@@ -41,7 +41,6 @@ const StatisticsPage: React.FC = () => {
                 ? list.filter((d) => String(d._id) === String((user as { departmentId?: string }).departmentId))
                 : list
             setDepartments(filtered)
-            if (filtered.length > 0 && !selectedDepartmentId) setSelectedDepartmentId(filtered[0]._id)
           }
         })
         .catch(() => { if (!cancelled) setDepartments([]) })
@@ -51,6 +50,20 @@ const StatisticsPage: React.FC = () => {
     }
     return () => { cancelled = true }
   }, [user?.role])
+
+  // После загрузки отделов — выбрать первый отдел и задать дефолтные даты, если ещё не выбрано
+  useEffect(() => {
+    if (departments.length === 0) return
+    const firstId = departments[0]._id
+    if (!selectedDepartmentId || !departments.some((d) => String(d._id) === String(selectedDepartmentId))) {
+      setSelectedDepartmentId(firstId)
+    }
+    if (dateFrom == null && dateTo == null) {
+      const today = dayjs()
+      setDateFrom(today)
+      setDateTo(today)
+    }
+  }, [departments])
 
   useEffect(() => {
     if (!selectedDepartmentId) {
@@ -125,6 +138,7 @@ const StatisticsPage: React.FC = () => {
         statuses={statuses}
         filterStatusId={filterStatusId}
         onFilterStatusIdChange={setFilterStatusId}
+        onQuickPeriod={(from, to) => { setDateFrom(from); setDateTo(to) }}
       />
 
       {loadingStats && (
@@ -141,12 +155,18 @@ const StatisticsPage: React.FC = () => {
             onExportCsv={() => handleExportStats('csv')}
             onExportXlsx={() => handleExportStats('xlsx')}
           />
+          <StatisticsSummaryCards stats={stats} />
           <StatisticsTable stats={stats} />
         </>
       )}
 
       {!loadingStats && !stats && selectedDepartmentId && (
-        <Typography color="rgba(255,255,255,0.5)">Нет данных по выбранному отделу.</Typography>
+        <Box sx={{ py: 2 }}>
+          <Typography color="rgba(255,255,255,0.5)">Нет данных по выбранному отделу.</Typography>
+          <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.4)', mt: 1 }}>
+            Попробуйте изменить период (Неделя / Месяц / Квартал) или сбросить фильтр по статусу.
+          </Typography>
+        </Box>
       )}
     </Box>
   )

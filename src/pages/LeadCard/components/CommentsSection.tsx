@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { Box, Typography, Paper, TextField, Button, IconButton, CircularProgress } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -32,13 +32,16 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   canEditOrDelete,
   onEdit,
   onDelete,
-}) => (
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
   <Paper sx={cardPaperSx}>
     <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 2, fontFamily: '"Orbitron", sans-serif', flexShrink: 0 }}>
       Комментарии
     </Typography>
     <Box component="form" onSubmit={onSubmit} sx={{ mb: 2, flexShrink: 0 }}>
       <TextField
+        inputRef={inputRef}
         fullWidth
         multiline
         minRows={2}
@@ -64,7 +67,18 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
           <CircularProgress size={24} sx={{ color: 'rgba(167,139,250,0.8)' }} />
         </Box>
       ) : comments.length === 0 ? (
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет комментариев</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет комментариев</Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Добавьте первый комментарий в поле выше.</Typography>
+          <Button
+            size="small"
+            startIcon={<ChatBubbleOutlineIcon />}
+            onClick={() => inputRef.current?.focus()}
+            sx={{ color: 'rgba(167,139,250,0.95)', mt: 0.5 }}
+          >
+            Добавить комментарий
+          </Button>
+        </Box>
       ) : (
         <Box
           sx={{
@@ -78,7 +92,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             ...(comments.length > 4 && { maxHeight: 320 }),
           }}
         >
-          {comments.map((comment) => (
+          {[...comments].reverse().map((comment) => (
             <Box
               key={comment._id}
               sx={{
@@ -125,6 +139,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       )}
     </Box>
   </Paper>
-)
+  )
+}
 
 export default CommentsSection

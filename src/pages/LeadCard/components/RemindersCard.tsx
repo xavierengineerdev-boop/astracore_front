@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { Box, Typography, Paper, TextField, Button, IconButton, CircularProgress, Tooltip } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import TaskAltIcon from '@mui/icons-material/TaskAlt'
@@ -38,6 +38,7 @@ const RemindersCard: React.FC<RemindersCardProps> = ({
   onDone,
   onDelete,
 }) => {
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const activeReminders = reminders.filter((r) => !r.done)
 
   return (
@@ -48,6 +49,7 @@ const RemindersCard: React.FC<RemindersCardProps> = ({
       <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         <Box component="form" onSubmit={onSubmit} sx={{ mb: 1.5 }}>
           <TextField
+            inputRef={titleInputRef}
             fullWidth
             size="small"
             placeholder="Например: перезвонить"
@@ -86,7 +88,18 @@ const RemindersCard: React.FC<RemindersCardProps> = ({
             <CircularProgress size={20} sx={{ color: 'rgba(167,139,250,0.8)' }} />
           </Box>
         ) : activeReminders.length === 0 ? (
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет активных напоминаний</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет активных напоминаний</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Добавьте первое напоминание в форме выше.</Typography>
+            <Button
+              size="small"
+              startIcon={<NotificationsActiveIcon />}
+              onClick={() => titleInputRef.current?.focus()}
+              sx={{ color: 'rgba(167,139,250,0.95)', mt: 0.5 }}
+            >
+              Добавить напоминание
+            </Button>
+          </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             {activeReminders.map((reminder) => (

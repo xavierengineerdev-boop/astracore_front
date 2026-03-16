@@ -1,3 +1,5 @@
 export { default as StatisticsFilters } from './StatisticsFilters'
 export { default as StatisticsExportBar } from './StatisticsExportBar'
 export { default as StatisticsTable } from './StatisticsTable'
+export { default as StatisticsSummaryCards } from './StatisticsSummaryCards'
+export { default as StatisticsPieChart } from './StatisticsPieChart'

@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx'
 import type { SxProps, Theme } from '@mui/material'
 import type { LeadStatsResult } from '@/api/leads'
 
+export const CHART_COLORS = ['#a78bfa', '#818cf8', '#6366f1', '#4f46e5', '#7c3aed', '#8b5cf6', '#c084fc', '#e879f9']
+
 export const formFieldSx: SxProps<Theme> = {
   '& .MuiOutlinedInput-root': { minHeight: 44 },
   '& .MuiInputBase-input': { color: 'rgba(255,255,255,0.95)' },
@@ -21,6 +23,14 @@ export function assigneeLabel(name: string, isManager: boolean): string {
   return isManager ? `${name} (Руководитель)` : `${name} (Сотрудник)`
 }
 
+function getTotalsRow(stats: LeadStatsResult): (string | number)[] {
+  const byStatus = stats.statuses.map((s) =>
+    stats.rows.reduce((sum, r) => sum + (r.byStatus.find((b) => b.statusId === s._id)?.count ?? 0), 0),
+  )
+  const total = stats.rows.reduce((sum, r) => sum + r.total, 0)
+  return ['Итого', ...byStatus, total]
+}
+
 export function exportStatsToCsv(stats: LeadStatsResult): void {
   const statusNames = stats.statuses.map((s) => s.name)
   const header = ['Ответственный', ...statusNames, 'Всего']
@@ -29,7 +39,12 @@ export function exportStatsToCsv(stats: LeadStatsResult): void {
     ...r.byStatus.map((b) => String(b.count)),
     String(r.total),
   ])
-  const lines = [header.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','), ...rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))]
+  const totalsRow = getTotalsRow(stats).map(String)
+  const lines = [
+    header.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','),
+    ...rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')),
+    totalsRow.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','),
+  ]
   const csv = '\uFEFF' + lines.join('\r\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   downloadBlob(blob, `stats-${stats.departmentName.replace(/[^\w\s-]/g, '')}-${dayjs().format('YYYY-MM-DD')}.csv`)
@@ -43,7 +58,8 @@ export function exportStatsToXlsx(stats: LeadStatsResult): void {
     ...r.byStatus.map((b) => b.count),
     r.total,
   ])
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+  const totalsRow = getTotalsRow(stats)
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows, totalsRow])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Статистика')
   XLSX.writeFile(wb, `stats-${stats.departmentName.replace(/[^\w\s-]/g, '')}-${dayjs().format('YYYY-MM-DD')}.xlsx`)

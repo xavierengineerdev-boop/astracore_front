@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { Box, Typography, Paper, TextField, Button, IconButton, Checkbox, CircularProgress } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import TaskAltIcon from '@mui/icons-material/TaskAlt'
@@ -36,7 +36,9 @@ const TasksCard: React.FC<TasksCardProps> = ({
   submitting,
   onToggle,
   onDelete,
-}) => (
+}) => {
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  return (
   <Paper sx={smallCardPaperSx}>
     <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
       Задачи
@@ -44,6 +46,7 @@ const TasksCard: React.FC<TasksCardProps> = ({
     <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
       <Box component="form" onSubmit={onSubmit} sx={{ mb: 1.5 }}>
         <TextField
+          inputRef={titleInputRef}
           fullWidth
           size="small"
           placeholder="Название задачи"
@@ -82,7 +85,18 @@ const TasksCard: React.FC<TasksCardProps> = ({
           <CircularProgress size={20} sx={{ color: 'rgba(167,139,250,0.8)' }} />
         </Box>
       ) : tasks.length === 0 ? (
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет задач</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>Нет задач</Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>Добавьте первую задачу в форме выше.</Typography>
+          <Button
+            size="small"
+            startIcon={<TaskAltIcon />}
+            onClick={() => titleInputRef.current?.focus()}
+            sx={{ color: 'rgba(167,139,250,0.95)', mt: 0.5 }}
+          >
+            Добавить задачу
+          </Button>
+        </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
           {tasks.map((task) => (
@@ -129,6 +143,7 @@ const TasksCard: React.FC<TasksCardProps> = ({
       )}
     </Box>
   </Paper>
-)
+  )
+}
 
 export default TasksCard
