@@ -56,7 +56,7 @@ const StatisticsSummaryCards: React.FC<StatisticsSummaryCardsProps> = ({ stats }
       </Box>
 
       {/* Статусы — компактные полоски с цветным акцентом, переносятся при нехватке места */}
-      {byStatus.slice(0, 6).map((s, i) => {
+      {byStatus.map((s, i) => {
         const accent = CHART_COLORS[i % CHART_COLORS.length]
         return (
           <Box
