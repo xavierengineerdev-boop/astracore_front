@@ -29,6 +29,8 @@ export type TaskItem = {
   dueAt: string | null
   order?: number
   createdBy: string
+  createdByName?: string
+  leadId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -98,6 +100,22 @@ export async function getTaskStatuses(departmentId: string): Promise<TaskStatusI
   return parseResponse<TaskStatusItem[]>(res)
 }
 
+export async function ensureTaskStatusDefaults(departmentId: string): Promise<TaskStatusItem[]> {
+  const res = await authenticatedFetch(
+    `${API_BASE}/task-statuses/ensure-defaults?departmentId=${encodeURIComponent(departmentId)}`,
+    { method: 'POST' },
+  )
+  return parseResponse<TaskStatusItem[]>(res)
+}
+
+export async function ensureTaskPriorityDefaults(departmentId: string): Promise<TaskPriorityItem[]> {
+  const res = await authenticatedFetch(
+    `${API_BASE}/task-priorities/ensure-defaults?departmentId=${encodeURIComponent(departmentId)}`,
+    { method: 'POST' },
+  )
+  return parseResponse<TaskPriorityItem[]>(res)
+}
+
 export async function createTaskStatus(data: {
   name: string
   color?: string
@@ -133,6 +151,11 @@ export async function getTasksByDepartment(departmentId: string): Promise<TaskIt
   return parseResponse<TaskItem[]>(res)
 }
 
+export async function getTasksByLeadId(leadId: string): Promise<TaskItem[]> {
+  const res = await authenticatedFetch(`${API_BASE}/tasks?leadId=${encodeURIComponent(leadId)}`)
+  return parseResponse<TaskItem[]>(res)
+}
+
 export async function getTask(id: string): Promise<TaskItem> {
   const res = await authenticatedFetch(`${API_BASE}/tasks/${id}`)
   return parseResponse<TaskItem>(res)
@@ -146,6 +169,7 @@ export async function createTask(data: {
   priorityId?: string | null
   assigneeId?: string | null
   dueAt?: string | null
+  leadId?: string | null
 }): Promise<TaskItem> {
   const res = await authenticatedFetch(`${API_BASE}/tasks`, {
     method: 'POST',
@@ -163,6 +187,7 @@ export async function updateTask(
     priorityId?: string | null
     assigneeId?: string | null
     dueAt?: string | null
+    leadId?: string | null
   },
 ): Promise<TaskItem> {
   const res = await authenticatedFetch(`${API_BASE}/tasks/${id}`, {

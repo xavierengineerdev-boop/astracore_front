@@ -37,7 +37,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import BackButton from '@/components/BackButton'
 import { useAuth } from '@/auth/AuthProvider'
 import { useToast } from '@/contexts/ToastContext'
@@ -47,6 +47,8 @@ import {
   getTasksByDepartment,
   getTaskStatuses,
   getTaskPriorities,
+  ensureTaskStatusDefaults,
+  ensureTaskPriorityDefaults,
   createTask,
   updateTask,
   deleteTask,
@@ -92,7 +94,13 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
+  const [createDescription, setCreateDescription] = useState('')
+  const [createPriorityId, setCreatePriorityId] = useState('')
+  const [createAssigneeId, setCreateAssigneeId] = useState('')
+  const [createDueAt, setCreateDueAt] = useState<Dayjs | null>(null)
+  const [createLeadId, setCreateLeadId] = useState<string | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [cardMenuAnchor, setCardMenuAnchor] = useState<null | HTMLElement>(null)
   const [cardMenuTask, setCardMenuTask] = useState<TaskItem | null>(null)
   const [deleteConfirmTask, setDeleteConfirmTask] = useState<TaskItem | null>(null)
@@ -125,10 +133,36 @@ export default function TasksPage() {
   const [editDueAt, setEditDueAt] = useState<Dayjs | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
-  const isSuper = user?.role === 'super'
+  const canAccessTasks =
+    user?.role === 'super' ||
+    user?.role === 'admin' ||
+    user?.role === 'manager' ||
+    (user?.role === 'employee' && Boolean(user?.departmentId))
+
+  const canEditTask = (task: TaskItem) => {
+    if (!user) return false
+    if (user.role === 'super' || user.role === 'admin') return true
+    if (user.role === 'manager' && user.departmentId) return String(task.departmentId) === String(user.departmentId)
+    if (user.role === 'employee')
+      return String(task.assigneeId) === String(user.userId) || String(task.createdBy) === String(user.userId)
+    return false
+  }
+
+  const canCreateInDepartment = (deptId: string) => {
+    if (!user) return false
+    if (user.role === 'super' || user.role === 'admin') return true
+    if ((user.role === 'manager' || user.role === 'employee') && user.departmentId)
+      return String(deptId) === String(user.departmentId)
+    return false
+  }
+
+  const canReorder = () =>
+    Boolean(user && (user.role === 'super' || user.role === 'admin' || user.role === 'manager'))
+
+  const canManageStatusesPriorities = user?.role === 'super'
 
   useEffect(() => {
-    if (!isSuper) {
+    if (!canAccessTasks) {
       navigate('/', { replace: true })
       return
     }
@@ -136,7 +170,12 @@ export default function TasksPage() {
     ;(async () => {
       try {
         const list = await getDepartments()
-        if (!cancelled) setDepartments(list)
+        if (!cancelled) {
+          setDepartments(list)
+          if (user?.role === 'employee' && user?.departmentId && list.some((d) => d._id === user.departmentId)) {
+            setDepartmentId(user.departmentId)
+          }
+        }
       } catch (e) {
         if (!cancelled) toast.error(String(e))
       }
@@ -144,7 +183,7 @@ export default function TasksPage() {
     return () => {
       cancelled = true
     }
-  }, [isSuper, navigate, toast])
+  }, [canAccessTasks, navigate, toast, user?.role, user?.departmentId])
 
   useEffect(() => {
     const id = departmentId?.trim()
@@ -161,8 +200,8 @@ export default function TasksPage() {
       try {
         const [taskList, statusList, priorityList, detail] = await Promise.all([
           getTasksByDepartment(id),
-          getTaskStatuses(id),
-          getTaskPriorities(id),
+          ensureTaskStatusDefaults(id),
+          ensureTaskPriorityDefaults(id),
           getDepartment(id),
         ])
         if (!cancelled) {
@@ -182,6 +221,22 @@ export default function TasksPage() {
     }
   }, [departmentId, toast])
 
+  const leadIdFromUrl = searchParams.get('leadId')
+  const departmentIdFromUrl = searchParams.get('departmentId')
+  useEffect(() => {
+    if (!createOpen && leadIdFromUrl && departmentIdFromUrl && departments.some((d) => d._id === departmentIdFromUrl)) {
+      setDepartmentId(departmentIdFromUrl)
+      setCreateLeadId(leadIdFromUrl)
+      setCreateOpen(true)
+      setSearchParams((p) => {
+        const next = new URLSearchParams(p)
+        next.delete('leadId')
+        next.delete('departmentId')
+        return next
+      }, { replace: true })
+    }
+  }, [leadIdFromUrl, departmentIdFromUrl, departments, createOpen, setSearchParams])
+
   const tasksByColumn = useMemo(() => {
     const byKey: Record<string, TaskItem[]> = {}
     for (const s of taskStatuses) byKey[s._id] = []
@@ -195,7 +250,15 @@ export default function TasksPage() {
   }, [tasks, taskStatuses])
 
   const handleCreateOpen = () => {
+    const leadIdParam = searchParams.get('leadId')
+    const deptParam = searchParams.get('departmentId')
     setCreateTitle('')
+    setCreateDescription('')
+    setCreatePriorityId('')
+    setCreateAssigneeId('')
+    setCreateDueAt(null)
+    setCreateLeadId(leadIdParam || null)
+    if (deptParam && departments.some((d) => d._id === deptParam)) setDepartmentId(deptParam)
     setCreateOpen(true)
   }
 
@@ -203,15 +266,25 @@ export default function TasksPage() {
     if (!createTitle.trim() || !departmentId) return
     setCreateSubmitting(true)
     try {
-      // Первый блок отдела (например «Новые задачи») — чтобы задача сразу отображалась на доске
       const firstBlockId = taskStatuses[0]?._id ?? null
       const created = await createTask({
         title: createTitle.trim(),
+        description: createDescription.trim() || undefined,
         departmentId,
         statusId: firstBlockId,
+        priorityId: createPriorityId || null,
+        assigneeId: createAssigneeId || null,
+        dueAt: createDueAt ? createDueAt.toISOString() : null,
+        leadId: createLeadId || null,
       })
       setTasks((prev) => [...prev, created])
       setCreateOpen(false)
+      setSearchParams((p) => {
+        const next = new URLSearchParams(p)
+        next.delete('leadId')
+        next.delete('departmentId')
+        return next
+      })
       toast.success('Задача создана')
     } catch (e) {
       toast.error(String(e))
@@ -512,7 +585,7 @@ export default function TasksPage() {
     return departmentDetail.employees
   }, [departmentDetail])
 
-  if (!isSuper) return null
+  if (!canAccessTasks) return null
 
   return (
     <Box sx={{ p: 2, maxWidth: 1600, mx: 'auto' }}>
@@ -546,17 +619,17 @@ export default function TasksPage() {
             ))}
           </Select>
         </FormControl>
-        {activeTab === 0 && departmentId && (
+        {activeTab === 0 && departmentId && canCreateInDepartment(departmentId) && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateOpen}>
             Новая задача
           </Button>
         )}
-        {activeTab === 1 && departmentId && (
+        {activeTab === 1 && departmentId && canManageStatusesPriorities && (
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openStatusDialog()}>
             Добавить блок
           </Button>
         )}
-        {activeTab === 2 && departmentId && (
+        {activeTab === 2 && departmentId && canManageStatusesPriorities && (
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openPriorityDialog()}>
             Добавить приоритет
           </Button>
@@ -582,7 +655,7 @@ export default function TasksPage() {
                   label={s.name}
                   size="medium"
                   sx={{ bgcolor: alpha(s.color, 0.2), borderColor: s.color, border: '1px solid' }}
-                  onDelete={() => setDeleteStatusConfirm(s)}
+                  onDelete={canManageStatusesPriorities ? () => setDeleteStatusConfirm(s) : undefined}
                   onClick={() => openStatusDialog(s)}
                 />
               ))}
@@ -613,7 +686,7 @@ export default function TasksPage() {
                   label={p.name}
                   size="medium"
                   sx={{ bgcolor: alpha(p.color, 0.2), borderColor: p.color, border: '1px solid' }}
-                  onDelete={() => setDeletePriorityConfirm(p)}
+                  onDelete={canManageStatusesPriorities ? () => setDeletePriorityConfirm(p) : undefined}
                   onClick={() => openPriorityDialog(p)}
                 />
               ))}
@@ -681,7 +754,7 @@ export default function TasksPage() {
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Chip label={columnTasks.length} size="small" />
-                    {columnStatus && (
+                    {columnStatus && canManageStatusesPriorities && (
                       <IconButton
                         size="small"
                         onClick={(e) => {
@@ -705,25 +778,26 @@ export default function TasksPage() {
                   }}
                   onDragOver={(e) => handleDragOver(e, colKey)}
                   onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, colKey)}
+                  onDrop={(e) => canReorder() && handleDrop(e, colKey)}
                 >
                   {columnTasks.map((task, index) => (
                     <Paper
                       key={task._id}
                       elevation={0}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, task)}
+                      draggable={canReorder()}
+                      onDragStart={(e) => canReorder() && handleDragStart(e, task)}
                       onDragEnd={handleDragEnd}
                       onDragOver={(e) => {
+                        if (!canReorder()) return
                         e.preventDefault()
                         e.stopPropagation()
                         e.dataTransfer.dropEffect = 'move'
                         setDragOverColumnId(colKey)
                       }}
-                      onDrop={(e) => handleDropOnCard(e, colKey, task, index)}
-                      onClick={() => openEditPanel(task)}
+                      onDrop={(e) => canReorder() && handleDropOnCard(e, colKey, task, index)}
+                      onClick={() => canEditTask(task) && openEditPanel(task)}
                       sx={{
-                        p: 1.75,
+                        p: 2,
                         mb: 1.5,
                         bgcolor: 'background.paper',
                         borderRadius: 1.5,
@@ -741,89 +815,124 @@ export default function TasksPage() {
                         '&:active': { cursor: 'grabbing' },
                       }}
                     >
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
-                        <Box sx={{ minWidth: 0, flex: 1 }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{
-                              lineHeight: 1.35,
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            {task.title}
-                          </Typography>
-                          {task.description?.trim() && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
                             <Typography
-                              variant="caption"
-                              color="text.secondary"
+                              variant="body2"
+                              fontWeight={600}
                               sx={{
-                                mt: 0.5,
+                                lineHeight: 1.4,
                                 display: '-webkit-box',
                                 WebkitLineClamp: 2,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
-                                lineHeight: 1.35,
                               }}
                             >
-                              {task.description.trim()}
+                              {task.title}
                             </Typography>
+                            {task.description?.trim() && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  mt: 0.5,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                  lineHeight: 1.35,
+                                }}
+                              >
+                                {task.description.trim()}
+                              </Typography>
+                            )}
+                          </Box>
+                          {canEditTask(task) && (
+                            <IconButton
+                              className="card-menu-btn"
+                              size="small"
+                              sx={{ opacity: 0.6, flexShrink: 0, mt: -0.5, mr: -0.5 }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCardMenuTask(task)
+                                setCardMenuAnchor(e.currentTarget)
+                              }}
+                            >
+                              <MoreVertIcon fontSize="small" />
+                            </IconButton>
                           )}
                         </Box>
-                        <IconButton
-                          className="card-menu-btn"
-                          size="small"
-                          sx={{ opacity: 0.6, flexShrink: 0, mt: -0.5, mr: -0.5 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setCardMenuTask(task)
-                            setCardMenuAnchor(e.currentTarget)
-                          }}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                      {(task.assigneeName || task.priorityName || task.dueAt) && (
                         <Box
                           sx={{
-                            mt: 1.25,
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 1,
                             pt: 1.25,
                             borderTop: '1px solid',
                             borderColor: 'divider',
                           }}
                         >
-                          {task.assigneeName && (
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block' }}>
-                              {task.assigneeName}
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                              Исполнитель
                             </Typography>
-                          )}
-                          {task.priorityName && (
-                            <Box sx={{ mt: task.assigneeName ? 0.5 : 0 }}>
-                              <Chip
-                                size="small"
-                                label={task.priorityName}
-                                sx={{
-                                  height: 22,
-                                  fontWeight: 600,
-                                  fontSize: '0.7rem',
-                                  bgcolor: alpha(task.priorityColor ?? '#9ca3af', 0.25),
-                                  border: '1px solid',
-                                  borderColor: alpha(task.priorityColor ?? '#9ca3af', 0.5),
-                                  '& .MuiChip-label': { px: 1 },
-                                }}
-                              />
-                            </Box>
-                          )}
-                          {task.dueAt && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: (task.assigneeName || task.priorityName) ? 0.5 : 0 }}>
-                              {formatDue(task.dueAt)}
+                            <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap title={task.assigneeName || undefined}>
+                              {task.assigneeName || '—'}
                             </Typography>
-                          )}
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                              Статус
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={task.statusName || '—'}
+                              sx={{
+                                height: 24,
+                                fontSize: '0.75rem',
+                                bgcolor: alpha(task.statusColor ?? '#9ca3af', 0.2),
+                                border: '1px solid',
+                                borderColor: alpha(task.statusColor ?? '#9ca3af', 0.4),
+                                '& .MuiChip-label': { px: 1 },
+                              }}
+                            />
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                              ДедЛайн
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {task.dueAt ? formatDue(task.dueAt) : '—'}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                              Ответственный
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap title={task.createdByName || undefined}>
+                              {task.createdByName || '—'}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ gridColumn: '1 / -1' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                              Приоритет
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={task.priorityName || '—'}
+                              sx={{
+                                height: 24,
+                                fontSize: '0.75rem',
+                                bgcolor: alpha(task.priorityColor ?? '#9ca3af', 0.25),
+                                border: '1px solid',
+                                borderColor: alpha(task.priorityColor ?? '#9ca3af', 0.5),
+                                '& .MuiChip-label': { px: 1 },
+                              }}
+                            />
+                          </Box>
                         </Box>
-                      )}
+                      </Box>
                     </Paper>
                   ))}
                 </Box>
@@ -907,7 +1016,7 @@ onClick={() => openStatusDialog()}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        {cardMenuTask && (
+        {cardMenuTask && canEditTask(cardMenuTask) && (
           <MenuItem
             onClick={() => openEditPanel(cardMenuTask)}
           >
@@ -918,6 +1027,7 @@ onClick={() => openStatusDialog()}
           </MenuItem>
         )}
         {cardMenuTask &&
+          canEditTask(cardMenuTask) &&
           taskStatuses
             .filter((s) => s._id !== cardMenuTask.statusId)
             .map((s) => (
@@ -929,6 +1039,7 @@ onClick={() => openStatusDialog()}
               </MenuItem>
             ))}
         {cardMenuTask &&
+          canEditTask(cardMenuTask) &&
           taskPriorities.map((p) => (
             <MenuItem
               key={p._id}
@@ -941,7 +1052,7 @@ onClick={() => openStatusDialog()}
               <ListItemText>Приоритет: {p.name}</ListItemText>
             </MenuItem>
           ))}
-        {cardMenuTask && (
+        {cardMenuTask && canEditTask(cardMenuTask) && (
           <MenuItem
             onClick={() => {
               setCardMenuAnchor(null)
@@ -1037,19 +1148,78 @@ onClick={() => openStatusDialog()}
         </Box>
       </Drawer>
 
-      <Dialog open={createOpen} onClose={() => !createSubmitting && setCreateOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={createOpen} onClose={() => !createSubmitting && (setCreateOpen(false), setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('leadId'); n.delete('departmentId'); return n; }, { replace: true }))} maxWidth="sm" fullWidth>
         <DialogTitle>Новая задача</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Название"
+            label="Название *"
             fullWidth
             required
             value={createTitle}
             onChange={(e) => setCreateTitle(e.target.value)}
             placeholder="Введите название задачи"
+            sx={{ mb: 1.5 }}
           />
+          <TextField
+            margin="dense"
+            label="Описание"
+            fullWidth
+            multiline
+            minRows={2}
+            value={createDescription}
+            onChange={(e) => setCreateDescription(e.target.value)}
+            placeholder="Описание задачи (необязательно)"
+            sx={{ mb: 1.5 }}
+          />
+          <FormControl fullWidth margin="dense" sx={{ mb: 1.5 }}>
+            <InputLabel>Приоритет</InputLabel>
+            <Select
+              value={createPriorityId}
+              label="Приоритет"
+              onChange={(e) => setCreatePriorityId(e.target.value)}
+            >
+              <MenuItem value="">Без приоритета</MenuItem>
+              {taskPriorities.map((p) => (
+                <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="dense" sx={{ mb: 1.5 }}>
+            <InputLabel>Исполнитель</InputLabel>
+            <Select
+              value={createAssigneeId}
+              label="Исполнитель"
+              onChange={(e) => setCreateAssigneeId(e.target.value)}
+            >
+              <MenuItem value="">Не назначен</MenuItem>
+              {employeesForAssign.map((u) => (
+                <MenuItem key={u._id} value={u._id}>
+                  {displayUser(u)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="ru">
+            <DateTimePicker
+              label="Срок"
+              value={createDueAt}
+              onChange={(v) => setCreateDueAt(v)}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  margin: 'dense',
+                  sx: { mb: 1.5 },
+                },
+              }}
+            />
+          </LocalizationProvider>
+          {createLeadId && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Задача будет привязана к лиду и отобразится в его карточке.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateOpen(false)} disabled={createSubmitting}>

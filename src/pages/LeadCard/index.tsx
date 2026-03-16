@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, Typography, IconButton, Tooltip, CircularProgress } from '@mui/material'
+import { Box, Typography, IconButton, Tooltip, CircularProgress, Paper, Button } from '@mui/material'
 import BackButton from '@/components/BackButton'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -34,7 +34,10 @@ import {
   type LeadTaskItem,
   type LeadReminderItem,
 } from '@/api/leads'
+import { getTasksByLeadId, type TaskItem } from '@/api/tasks'
 import { getDepartment, type DepartmentDetail } from '@/api/departments'
+import { smallCardPaperSx } from './constants'
+import AssignmentIcon from '@mui/icons-material/Assignment'
 import { getStatusesByDepartment, type StatusItem } from '@/api/statuses'
 import { getLeadTagsByDepartment, type LeadTagItem } from '@/api/leadTags'
 import type { Dayjs } from 'dayjs'
@@ -111,6 +114,8 @@ const LeadCardPage: React.FC = () => {
   const [reminderTitle, setReminderTitle] = useState('')
   const [reminderRemindAt, setReminderRemindAt] = useState<Dayjs | null>(null)
   const [reminderSubmitting, setReminderSubmitting] = useState(false)
+  const [boardTasks, setBoardTasks] = useState<TaskItem[]>([])
+  const [loadingBoardTasks, setLoadingBoardTasks] = useState(false)
 
   const isEmployee = currentUser?.role === 'employee'
   const isManager = currentUser?.role === 'super' || currentUser?.role === 'admin' || currentUser?.role === 'manager'
@@ -257,11 +262,13 @@ const LeadCardPage: React.FC = () => {
     setLoadingHistory(true)
     setLoadingTasks(true)
     setLoadingReminders(true)
+    setLoadingBoardTasks(true)
     getLeadNotes(id).then(setNotes).catch(() => setNotes([])).finally(() => setLoadingNotes(false))
     getLeadComments(id).then(setComments).catch(() => setComments([])).finally(() => setLoadingComments(false))
     getLeadHistory(id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false))
     getLeadTasks(id).then(setTasks).catch(() => setTasks([])).finally(() => setLoadingTasks(false))
     getLeadReminders(id).then(setReminders).catch(() => setReminders([])).finally(() => setLoadingReminders(false))
+    getTasksByLeadId(id).then(setBoardTasks).catch(() => setBoardTasks([])).finally(() => setLoadingBoardTasks(false))
   }, [id, lead?._id])
 
   const refetchNotesAndHistory = () => {
@@ -656,6 +663,63 @@ const LeadCardPage: React.FC = () => {
           onDone={handleReminderDone}
           onDelete={handleDeleteReminder}
         />
+        <Paper sx={smallCardPaperSx}>
+          <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.95)', mb: 1.5, fontFamily: '"Orbitron", sans-serif', flexShrink: 0, fontSize: '1rem' }}>
+            Задачи из задачника
+          </Typography>
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            {loadingBoardTasks ? (
+              <Box sx={{ py: 1, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress size={20} sx={{ color: 'rgba(167,139,250,0.8)' }} />
+              </Box>
+            ) : boardTasks.length === 0 ? (
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                Нет задач из задачника, привязанных к этому лиду.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {boardTasks.map((task) => (
+                  <Box
+                    key={task._id}
+                    component="button"
+                    type="button"
+                    onClick={() => navigate(`/tasks?departmentId=${encodeURIComponent(task.departmentId)}`)}
+                    sx={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      py: 0.75,
+                      px: 1,
+                      borderRadius: 1,
+                      bgcolor: 'rgba(255,255,255,0.05)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'rgba(255,255,255,0.9)',
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{task.title}</Typography>
+                    {(task.assigneeName || task.statusName || task.dueAt) && (
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        {[task.statusName, task.assigneeName, task.dueAt ? new Date(task.dueAt).toLocaleDateString('ru-RU') : ''].filter(Boolean).join(' · ')}
+                      </Typography>
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            )}
+            {lead?.departmentId && (currentUser?.role === 'super' || currentUser?.role === 'admin' || currentUser?.role === 'manager' || (currentUser?.role === 'employee' && currentUser?.departmentId)) && (
+              <Button
+                size="small"
+                startIcon={<AssignmentIcon />}
+                onClick={() => navigate(`/tasks?leadId=${encodeURIComponent(id!)}&departmentId=${encodeURIComponent(lead.departmentId)}`)}
+                sx={{ color: 'rgba(167,139,250,0.95)', mt: 1.5 }}
+              >
+                Создать задачу в задачник
+              </Button>
+            )}
+          </Box>
+        </Paper>
       </Box>
 
       <LeadHistorySection

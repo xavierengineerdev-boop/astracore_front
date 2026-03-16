@@ -207,7 +207,7 @@ const MainLayout: React.FC = () => {
     ...(user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager'
       ? [{ path: '/statistics', label: 'Статистика', icon: <BarChartIcon /> }]
       : []),
-    ...(user?.role === 'super'
+    ...((user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager' || (user?.role === 'employee' && user?.departmentId))
       ? [{ path: '/tasks', label: 'Задачник', icon: <AssignmentIcon /> }]
       : []),
   ]
