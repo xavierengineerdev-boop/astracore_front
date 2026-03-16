@@ -45,8 +45,8 @@ import { getDepartments } from '@/api/departments'
 import { getDepartment, type DepartmentDetail, type UserItemBrief } from '@/api/departments'
 import {
   getTasksByDepartment,
-  ensureTaskStatusDefaults,
-  ensureTaskPriorityDefaults,
+  getTaskStatuses,
+  getTaskPriorities,
   createTask,
   updateTask,
   deleteTask,
@@ -198,8 +198,8 @@ export default function TasksPage() {
       try {
         const [taskList, statusList, priorityList, detail] = await Promise.all([
           getTasksByDepartment(id),
-          ensureTaskStatusDefaults(id),
-          ensureTaskPriorityDefaults(id),
+          getTaskStatuses(id),
+          getTaskPriorities(id),
           getDepartment(id),
         ])
         if (!cancelled) {
