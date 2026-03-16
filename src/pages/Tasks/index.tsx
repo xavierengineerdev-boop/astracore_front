@@ -45,8 +45,6 @@ import { getDepartments } from '@/api/departments'
 import { getDepartment, type DepartmentDetail, type UserItemBrief } from '@/api/departments'
 import {
   getTasksByDepartment,
-  getTaskStatuses,
-  getTaskPriorities,
   ensureTaskStatusDefaults,
   ensureTaskPriorityDefaults,
   createTask,
