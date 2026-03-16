@@ -169,8 +169,9 @@ export default function TasksPage() {
       try {
         const list = await getDepartments()
         if (!cancelled) {
-          setDepartments(list)
-          if (user?.role === 'employee' && user?.departmentId && list.some((d) => d._id === user.departmentId)) {
+          const deptList = Array.isArray(list) ? list : []
+          setDepartments(deptList)
+          if (user?.role === 'employee' && user?.departmentId && deptList.some((d) => d._id === user.departmentId)) {
             setDepartmentId(user.departmentId)
           }
         }
@@ -203,10 +204,10 @@ export default function TasksPage() {
           getDepartment(id),
         ])
         if (!cancelled) {
-          setTasks(taskList)
-          setTaskStatuses(statusList)
-          setTaskPriorities(priorityList)
-          setDepartmentDetail(detail)
+          setTasks(Array.isArray(taskList) ? taskList : [])
+          setTaskStatuses(Array.isArray(statusList) ? statusList : [])
+          setTaskPriorities(Array.isArray(priorityList) ? priorityList : [])
+          setDepartmentDetail(detail ?? null)
         }
       } catch (e) {
         if (!cancelled) toast.error(String(e))
@@ -222,7 +223,8 @@ export default function TasksPage() {
   const leadIdFromUrl = searchParams.get('leadId')
   const departmentIdFromUrl = searchParams.get('departmentId')
   useEffect(() => {
-    if (!createOpen && leadIdFromUrl && departmentIdFromUrl && departments.some((d) => d._id === departmentIdFromUrl)) {
+    const deptList = departments ?? []
+    if (!createOpen && leadIdFromUrl && departmentIdFromUrl && deptList.some((d) => d._id === departmentIdFromUrl)) {
       setDepartmentId(departmentIdFromUrl)
       setCreateLeadId(leadIdFromUrl)
       setCreateOpen(true)
@@ -236,16 +238,22 @@ export default function TasksPage() {
   }, [leadIdFromUrl, departmentIdFromUrl, departments, createOpen, setSearchParams])
 
   const tasksByColumn = useMemo(() => {
+    const statuses = Array.isArray(taskStatuses) ? taskStatuses : []
+    const taskList = Array.isArray(tasks) ? tasks : []
     const byKey: Record<string, TaskItem[]> = {}
-    for (const s of taskStatuses) byKey[s._id] = []
+    for (const s of statuses) byKey[s._id] = []
     byKey['none'] = []
-    const statusIds = new Set(taskStatuses.map((s) => s._id))
-    for (const t of tasks) {
+    const statusIds = new Set(statuses.map((s) => s._id))
+    for (const t of taskList) {
       const key = t.statusId && statusIds.has(t.statusId) ? t.statusId : 'none'
       byKey[key].push(t)
     }
     return byKey
   }, [tasks, taskStatuses])
+
+  const safeTaskStatuses = Array.isArray(taskStatuses) ? taskStatuses : []
+  const safeTaskPriorities = Array.isArray(taskPriorities) ? taskPriorities : []
+  const safeDepartments = Array.isArray(departments) ? departments : []
 
   const handleCreateOpen = () => {
     const leadIdParam = searchParams.get('leadId')
@@ -256,7 +264,7 @@ export default function TasksPage() {
     setCreateAssigneeId('')
     setCreateDueAt(null)
     setCreateLeadId(leadIdParam || null)
-    if (deptParam && departments.some((d) => d._id === deptParam)) setDepartmentId(deptParam)
+    if (deptParam && (departments ?? []).some((d) => d._id === deptParam)) setDepartmentId(deptParam)
     setCreateOpen(true)
   }
 
@@ -264,7 +272,7 @@ export default function TasksPage() {
     if (!createTitle.trim() || !departmentId) return
     setCreateSubmitting(true)
     try {
-      const firstBlockId = taskStatuses[0]?._id ?? null
+      const firstBlockId = (Array.isArray(taskStatuses) ? taskStatuses[0]?._id : null) ?? null
       const created = await createTask({
         title: createTitle.trim(),
         description: createDescription.trim() || undefined,
@@ -325,7 +333,7 @@ export default function TasksPage() {
     const newStatusId = targetColumnId === 'none' ? null : targetColumnId
     const currentCol = task.statusId ?? 'none'
     if (currentCol === (newStatusId ?? 'none')) return
-    if (newStatusId && !taskStatuses.some((s) => s._id === newStatusId)) return
+    if (newStatusId && !(Array.isArray(taskStatuses) ? taskStatuses : []).some((s) => s._id === newStatusId)) return
     try {
       const updated = await updateTask(taskId, { statusId: newStatusId })
       setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)))
@@ -610,7 +618,7 @@ export default function TasksPage() {
             onChange={(e) => setDepartmentId(e.target.value)}
           >
             <MenuItem value="">Выберите отдел</MenuItem>
-            {departments.map((d) => (
+            {safeDepartments.map((d) => (
               <MenuItem key={d._id} value={d._id}>
                 {d.name}
               </MenuItem>
@@ -647,7 +655,7 @@ export default function TasksPage() {
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-              {taskStatuses.map((s) => (
+              {safeTaskStatuses.map((s) => (
                 <Chip
                   key={s._id}
                   label={s.name}
@@ -657,7 +665,7 @@ export default function TasksPage() {
                   onClick={() => openStatusDialog(s)}
                 />
               ))}
-              {taskStatuses.length === 0 && (
+              {safeTaskStatuses.length === 0 && (
                 <Typography color="text.secondary">Нет блоков. Нажмите «Добавить блок».</Typography>
               )}
             </Box>
@@ -678,7 +686,7 @@ export default function TasksPage() {
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-              {taskPriorities.map((p) => (
+              {safeTaskPriorities.map((p) => (
                 <Chip
                   key={p._id}
                   label={p.name}
@@ -688,7 +696,7 @@ export default function TasksPage() {
                   onClick={() => openPriorityDialog(p)}
                 />
               ))}
-              {taskPriorities.length === 0 && (
+              {safeTaskPriorities.length === 0 && (
                 <Typography color="text.secondary">Нет приоритетов. Нажмите «Добавить приоритет».</Typography>
               )}
             </Box>
@@ -713,7 +721,7 @@ export default function TasksPage() {
           }}
         >
           {[
-            ...taskStatuses.map((s) => ({ id: s._id, label: s.name, color: s.color, status: s })),
+            ...safeTaskStatuses.map((s) => ({ id: s._id, label: s.name, color: s.color, status: s })),
             ...(tasksByColumn['none']?.length
               ? [{ id: 'none', label: 'Без блока', color: '#6b7280', status: null }]
               : []),
@@ -1026,7 +1034,7 @@ onClick={() => openStatusDialog()}
         )}
         {cardMenuTask &&
           canEditTask(cardMenuTask) &&
-          taskStatuses
+          safeTaskStatuses
             .filter((s) => s._id !== cardMenuTask.statusId)
             .map((s) => (
               <MenuItem key={s._id} onClick={() => handleStatusChange(cardMenuTask, s._id)}>
@@ -1038,7 +1046,7 @@ onClick={() => openStatusDialog()}
             ))}
         {cardMenuTask &&
           canEditTask(cardMenuTask) &&
-          taskPriorities.map((p) => (
+          safeTaskPriorities.map((p) => (
             <MenuItem
               key={p._id}
               onClick={() => handlePriorityChange(cardMenuTask, p._id)}
@@ -1098,7 +1106,7 @@ onClick={() => openStatusDialog()}
                   onChange={(e) => setEditPriorityId(e.target.value)}
                 >
                   <MenuItem value="">Без приоритета</MenuItem>
-                  {taskPriorities.map((p) => (
+                  {safeTaskPriorities.map((p) => (
                     <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>
                   ))}
                 </Select>
@@ -1179,7 +1187,7 @@ onClick={() => openStatusDialog()}
               onChange={(e) => setCreatePriorityId(e.target.value)}
             >
               <MenuItem value="">Без приоритета</MenuItem>
-              {taskPriorities.map((p) => (
+              {safeTaskPriorities.map((p) => (
                 <MenuItem key={p._id} value={p._id}>{p.name}</MenuItem>
               ))}
             </Select>

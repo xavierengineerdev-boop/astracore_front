@@ -31,7 +31,6 @@ const LeadsByStatusChart: React.FC<LeadsByStatusChartProps> = ({ data }) => {
               outerRadius={90}
               paddingAngle={2}
               dataKey="value"
-              label={({ name, value }) => `${name}: ${value}`}
               onMouseEnter={(_, index) => setActivePieIndex(index)}
               onMouseLeave={() => setActivePieIndex(-1)}
             >
