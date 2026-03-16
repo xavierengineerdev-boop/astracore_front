@@ -35,12 +35,14 @@ const StatisticsPage: React.FC = () => {
     if (user?.role === 'super' || user?.role === 'admin' || user?.role === 'manager') {
       getDepartments()
         .then((list) => {
-          if (!cancelled) {
+          if (!cancelled && Array.isArray(list)) {
             const filtered =
               user?.role === 'manager' && (user as { departmentId?: string }).departmentId
                 ? list.filter((d) => String(d._id) === String((user as { departmentId?: string }).departmentId))
                 : list
             setDepartments(filtered)
+          } else if (!cancelled) {
+            setDepartments([])
           }
         })
         .catch(() => { if (!cancelled) setDepartments([]) })

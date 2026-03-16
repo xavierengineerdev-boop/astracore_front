@@ -10,15 +10,18 @@ export interface StatisticsSummaryCardsProps {
 const CARD_MIN = 120
 
 const StatisticsSummaryCards: React.FC<StatisticsSummaryCardsProps> = ({ stats }) => {
+  const rows = Array.isArray(stats?.rows) ? stats.rows : []
+  const statuses = Array.isArray(stats?.statuses) ? stats.statuses : []
+
   const { totalLeads, byStatus } = useMemo(() => {
-    const total = stats.rows.reduce((sum, r) => sum + r.total, 0)
-    const byStatusList = stats.statuses.map((s) => ({
-      statusId: s._id,
-      statusName: s.name,
-      count: stats.rows.reduce((sum, r) => sum + (r.byStatus.find((b) => b.statusId === s._id)?.count ?? 0), 0),
+    const total = rows.reduce((sum, r) => sum + (r?.total ?? 0), 0)
+    const byStatusList = statuses.map((s) => ({
+      statusId: s?._id ?? '',
+      statusName: typeof s?.name === 'string' ? s.name : '',
+      count: rows.reduce((sum, r) => sum + (Array.isArray(r?.byStatus) ? (r.byStatus.find((b) => b?.statusId === s?._id)?.count ?? 0) : 0), 0),
     }))
     return { totalLeads: total, byStatus: byStatusList }
-  }, [stats])
+  }, [rows, statuses])
 
   return (
     <Box
@@ -59,7 +62,7 @@ const StatisticsSummaryCards: React.FC<StatisticsSummaryCardsProps> = ({ stats }
       {byStatus.map((s, i) => {
         const accent = CHART_COLORS[i % CHART_COLORS.length]
         return (
-          <Tooltip key={s.statusId} title={s.statusName} placement="top" arrow enterDelay={300}>
+          <Tooltip key={s.statusId} title={s.statusName ?? ''} placement="top" arrow enterDelay={300}>
             <Box
               sx={{
                 minHeight: 88,

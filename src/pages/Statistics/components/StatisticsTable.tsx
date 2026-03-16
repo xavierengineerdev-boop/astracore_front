@@ -29,25 +29,28 @@ const StatisticsTable: React.FC<StatisticsTableProps> = ({ stats }) => {
   const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
+  const rows = Array.isArray(stats?.rows) ? stats.rows : []
+  const statuses = Array.isArray(stats?.statuses) ? stats.statuses : []
+
   const totals = useMemo(() => {
-    const byStatus = stats.statuses.map((s) => ({
+    const byStatus = statuses.map((s) => ({
       statusId: s._id,
-      count: stats.rows.reduce((sum, r) => sum + (r.byStatus.find((b) => b.statusId === s._id)?.count ?? 0), 0),
+      count: rows.reduce((sum, r) => sum + (r.byStatus.find((b) => b.statusId === s._id)?.count ?? 0), 0),
     }))
-    const total = stats.rows.reduce((sum, r) => sum + r.total, 0)
+    const total = rows.reduce((sum, r) => sum + r.total, 0)
     return { byStatus, total }
-  }, [stats])
+  }, [rows, statuses])
 
   const sortedRows = useMemo(() => {
     const key = sortKey
     const order = sortOrder
-    return [...stats.rows].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const va = getRowValue(a, key)
       const vb = getRowValue(b, key)
       const cmp = typeof va === 'string' && typeof vb === 'string' ? va.localeCompare(vb) : (va as number) - (vb as number)
       return order === 'asc' ? cmp : -cmp
     })
-  }, [stats.rows, sortKey, sortOrder])
+  }, [rows, sortKey, sortOrder])
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -76,7 +79,7 @@ const StatisticsTable: React.FC<StatisticsTableProps> = ({ stats }) => {
                 Ответственный
               </TableSortLabel>
             </TableCell>
-            {stats.statuses.map((s) => (
+            {statuses.map((s) => (
               <TableCell key={s._id} align="right" sx={headCellSx}>
                 <TableSortLabel
                   active={sortKey === s._id}

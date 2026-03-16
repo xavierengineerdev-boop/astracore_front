@@ -18,7 +18,7 @@ const StatisticsExportBar: React.FC<StatisticsExportBarProps> = ({
 }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 2 }}>
     <Typography variant="subtitle1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-      {stats.departmentName}
+      {stats?.departmentName ?? ''}
       {stats.filters && (stats.filters.dateFrom || stats.filters.dateTo || stats.filters.statusId) && (
         <Typography component="span" variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', ml: 1 }}>
           (с фильтрами)
