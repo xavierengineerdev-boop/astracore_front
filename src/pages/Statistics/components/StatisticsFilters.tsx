@@ -11,9 +11,7 @@ import {
   Tooltip,
   IconButton,
 } from '@mui/material'
-import BusinessIcon from '@mui/icons-material/Business'
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday'
-import LabelIcon from '@mui/icons-material/Label'
 import EventIcon from '@mui/icons-material/Event'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import ViewAgendaIcon from '@mui/icons-material/ViewAgenda'
